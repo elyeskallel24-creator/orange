@@ -1,8 +1,12 @@
 // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
+import { CreateMLCEngine } from 'web-llm';
 
 console.log('%cORANGE', 'color: orange; font-size: 2rem; font-weight: bold;');
 console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #ccc;');
 
+const statusDiv = document.getElementById('status');
+
+// Initialize Orb
 class LivingOrb {
   constructor(canvas) {
     this.canvas = canvas;
@@ -56,6 +60,29 @@ class LivingOrb {
 
 const canvas = document.getElementById('orb');
 const orb = new LivingOrb(canvas);
+
+// WebLLM Engine
+let engine = null;
+async function initEngine() {
+  try {
+    statusDiv.textContent = 'Loading WebGPU engine...';
+    // Using a small Qwen model for fast startup. UNVERIFIED: Check latest model ID on https://github.com/mlc-ai/web-llm
+    engine = await CreateMLCEngine('Qwen2.5-0.5B-Instruct-q4f16_1-MLC', {
+      initProgressCallback: (report) => {
+        statusDiv.textContent = `Loading model: ${Math.round(report.progress * 100)}%`;
+        orb.pulse(0.1);
+      }
+    });
+    statusDiv.textContent = 'Engine ready. Press Ctrl+K to compile.';
+    console.log('WebLLM Engine initialized');
+  } catch (e) {
+    statusDiv.textContent = 'WebGPU not supported. Fallback mode.';
+    console.error(e);
+  }
+}
+initEngine();
+
+// Command Palette Logic
 const cmdPalette = document.getElementById('cmd-palette');
 const cmdInput = document.getElementById('cmd-input');
 
@@ -69,6 +96,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { cmdPalette.classList.remove('active'); hideEasterEgg(); }
 });
 
+// Easter Egg Logic
 const eeOverlay = document.getElementById('easter-egg-overlay');
 const eeText = document.getElementById('easter-egg-text');
 let logoClicks = 0, typedChars = '';
