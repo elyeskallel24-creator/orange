@@ -1,11 +1,13 @@
 // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
 import { CreateMLCEngine } from 'web-llm';
 import { pipeline } from '@huggingface/transformers';
+import { compileToFlow, validateFlow, repairFlow } from './compiler.js';
 
 console.log('%cORANGE', 'color: orange; font-size: 2rem; font-weight: bold;');
 console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #ccc;');
 
 const statusDiv = document.getElementById('status');
+const cortexDiv = document.getElementById('cortex');
 
 // Initialize Orb
 class LivingOrb {
@@ -69,9 +71,8 @@ let transformersPipeline = null;
 async function initEngine() {
   try {
     statusDiv.textContent = 'Checking WebGPU support...';
-    if (!navigator.gpu) {
-      throw new Error('WebGPU not supported by browser');
-    }
+    if (!navigator.gpu) throw new Error('WebGPU not supported by browser');
+    
     statusDiv.textContent = 'Loading WebGPU engine...';
     webLLMEngine = await CreateMLCEngine('Qwen2.5-0.5B-Instruct-q4f16_1-MLC', {
       initProgressCallback: (report) => {
@@ -80,14 +81,9 @@ async function initEngine() {
       }
     });
     statusDiv.textContent = 'WebGPU Engine ready. Press Ctrl+K to compile.';
-    console.log('WebLLM Engine initialized');
   } catch (e) {
-    console.warn('WebGPU failed, falling back to WASM:', e);
-    statusDiv.textContent = 'WebGPU unavailable. Using lightweight mode...';
-    // For now, skip heavy model loading and use a simple mock for demo
-    // This allows the app to work immediately without 300MB downloads
+    console.warn('WebGPU failed, falling back to lightweight mode:', e);
     statusDiv.textContent = 'Ready (lightweight mode). Press Ctrl+K to start.';
-    console.log('Lightweight mode active - no model loaded yet');
   }
 }
 initEngine();
@@ -105,6 +101,35 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); toggleCmd(); }
   if (e.key === 'Escape') { cmdPalette.classList.remove('active'); hideEasterEgg(); }
 });
+
+// Compiler Integration
+cmdInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && cmdInput.value.trim() !== '') {
+    e.preventDefault();
+    statusDiv.textContent = 'Compiling...';
+    orb.pulse(0.8);
+    
+    setTimeout(() => {
+      let flow = compileToFlow(cmdInput.value);
+      const errors = validateFlow(flow);
+      if (errors.length > 0) {
+        statusDiv.textContent = `Validation errors: ${errors.join(', ')}. Repairing...`;
+        flow = repairFlow(flow, errors);
+      }
+      
+      renderCortex(flow);
+      statusDiv.textContent = 'Compiled successfully. Flow ready.';
+      cmdPalette.classList.remove('active');
+      cmdInput.value = '';
+    }, 600); // Simulated thinking delay for wow factor
+  }
+});
+
+function renderCortex(flow) {
+  if (!cortexDiv) return;
+  cortexDiv.innerHTML = `<pre style="text-align:left; font-size:0.8rem; color:var(--fg);">${JSON.stringify(flow, null, 2)}</pre>`;
+  cortexDiv.style.display = 'block';
+}
 
 // Easter Egg Logic
 const eeOverlay = document.getElementById('easter-egg-overlay');
