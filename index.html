@@ -1,41 +1,83 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ORANGE</title>
-  <!-- EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything. -->
-  <style>
-    :root {
-      --bg: oklch(0.15 0.02 250);
-      --fg: oklch(0.95 0.01 250);
-      --accent: oklch(0.75 0.18 50);
+// EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
+import { LivingOrb } from './orb.js';
+
+console.log('%cORANGE', 'color: orange; font-size: 2rem; font-weight: bold;');
+console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #ccc;');
+
+// Initialize Orb
+const canvas = document.getElementById('orb');
+const orb = new LivingOrb(canvas);
+
+// Command Palette Logic
+const cmdPalette = document.getElementById('cmd-palette');
+const cmdInput = document.getElementById('cmd-input');
+const openCmdBtn = document.getElementById('open-cmd');
+
+function toggleCmdPalette() {
+  cmdPalette.classList.toggle('active');
+  if (cmdPalette.classList.contains('active')) {
+    cmdInput.focus();
+    orb.pulse(0.5);
+  }
+}
+
+openCmdBtn.addEventListener('click', toggleCmdPalette);
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    toggleCmdPalette();
+  }
+  if (e.key === 'Escape') {
+    cmdPalette.classList.remove('active');
+    hideEasterEgg();
+  }
+});
+
+// Easter Egg Logic
+const logo = document.getElementById('logo');
+const eeTrigger = document.getElementById('ee-trigger');
+const eeOverlay = document.getElementById('easter-egg-overlay');
+const eeText = document.getElementById('easter-egg-text');
+let logoClicks = 0;
+let typedChars = '';
+
+function showEasterEgg() {
+  orb.triggerEasterEgg();
+  eeOverlay.classList.add('active');
+  const message = "One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.";
+  eeText.textContent = '';
+  let i = 0;
+  const typeInterval = setInterval(() => {
+    eeText.textContent += message.charAt(i);
+    i++;
+    if (i >= message.length) clearInterval(typeInterval);
+  }, 30);
+}
+
+function hideEasterEgg() {
+  orb.hideEasterEgg();
+  eeOverlay.classList.remove('active');
+}
+
+logo.addEventListener('click', () => {
+  logoClicks++;
+  if (logoClicks === 3) {
+    showEasterEgg();
+    logoClicks = 0;
+  }
+  setTimeout(() => { logoClicks = 0; }, 1000);
+});
+
+eeTrigger.addEventListener('click', showEasterEgg);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key.length === 1) {
+    typedChars += e.key.toLowerCase();
+    if (typedChars.includes('gg33')) {
+      showEasterEgg();
+      typedChars = '';
     }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: system-ui, -apple-system, sans-serif;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-    main { flex: 1; display: grid; place-items: center; }
-    footer {
-      text-align: center;
-      padding: 1rem;
-      font-size: 0.8rem;
-      opacity: 0.6;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <h1 style="color: var(--accent);">ORANGE</h1>
-  </main>
-  <footer>
-    made with love by Elyes Kallel with the spirit of BXB
-  </footer>
-  <script type="module" src="./main.js"></script>
-</body>
-</html>
+    if (typedChars.length > 10) typedChars = typedChars.slice(-10);
+  }
+});
