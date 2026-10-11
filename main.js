@@ -1,6 +1,4 @@
 // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
-import { CreateMLCEngine } from 'web-llm';
-import { pipeline } from '@huggingface/transformers';
 import { compileToFlow, validateFlow, repairFlow } from './compiler.js';
 
 console.log('%cORANGE', 'color: orange; font-size: 2rem; font-weight: bold;');
@@ -14,7 +12,7 @@ class LivingOrb {
   constructor(canvas) {
     this.canvas = canvas;
     this.gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-    this.time = 0; this.energy = 0; this.showEasterEgg = false;
+    this.time = 0; this.energy = 0; this.showEasterEgg = false; this.state = 'idle';
     if (!this.gl) { console.warn('WebGL not supported'); return; }
     this.initShaders(); this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -44,11 +42,14 @@ class LivingOrb {
   }
   compileShader(type, src) { const s = this.gl.createShader(type); this.gl.shaderSource(s, src); this.gl.compileShader(s); return s; }
   resize() { const s = Math.min(window.innerWidth, window.innerHeight, 800); this.canvas.width = s; this.canvas.height = s; this.gl.viewport(0, 0, s, s); }
-  pulse(amt = 0.3) { this.energy = Math.min(this.energy + amt, 1.0); }
+  pulse(amt = 0.3) { this.energy = Math.min(this.energy + amt, 1.0); this.state = 'generating'; }
+  setIdle() { this.state = 'idle'; this.energy = 0; }
   triggerEasterEgg() { this.showEasterEgg = true; }
   hideEasterEgg() { this.showEasterEgg = false; }
   animate() {
-    if (!this.gl) return; this.time += 0.016; this.energy *= 0.95;
+    if (!this.gl) return; 
+    if (this.state === 'idle') this.energy *= 0.95;
+    this.time += 0.016;
     this.gl.clearColor(0,0,0,0); this.gl.clear(this.gl.COLOR_BUFFER_BIT);
     this.gl.useProgram(this.program);
     this.gl.uniform1f(this.timeLoc, this.time); this.gl.uniform1f(this.energyLoc, this.energy);
@@ -64,29 +65,41 @@ class LivingOrb {
 const canvas = document.getElementById('orb');
 const orb = new LivingOrb(canvas);
 
-// Engine State
-let webLLMEngine = null;
-let transformersPipeline = null;
+// Web Worker Setup
+const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+let currentMode = 'FALLBACK'; // Default to fallback until worker confirms LIVE
 
-async function initEngine() {
-  try {
-    statusDiv.textContent = 'Checking WebGPU support...';
-    if (!navigator.gpu) throw new Error('WebGPU not supported by browser');
-    
-    statusDiv.textContent = 'Loading WebGPU engine...';
-    webLLMEngine = await CreateMLCEngine('Qwen2.5-0.5B-Instruct-q4f16_1-MLC', {
-      initProgressCallback: (report) => {
-        statusDiv.textContent = `Loading WebGPU model: ${Math.round(report.progress * 100)}%`;
-        orb.pulse(0.1);
-      }
-    });
-    statusDiv.textContent = 'WebGPU Engine ready. Press Ctrl+K to compile.';
-  } catch (e) {
-    console.warn('WebGPU failed, falling back to lightweight mode:', e);
-    statusDiv.textContent = 'Ready (lightweight mode). Press Ctrl+K to start.';
+worker.onmessage = (e) => {
+  const { type, payload } = e.data;
+  if (type === 'PROGRESS') {
+    statusDiv.textContent = payload.status;
+    orb.pulse(0.1);
+  } else if (type === 'READY') {
+    currentMode = 'LIVE';
+    statusDiv.textContent = `LIVE: ${payload.model} ready. Press Ctrl+K.`;
+    orb.setIdle();
+  } else if (type === 'STATUS') {
+    statusDiv.textContent = payload;
+    orb.pulse(0.8);
+  } else if (type === 'SUCCESS') {
+    renderCortex(payload.flow, payload.metrics);
+    statusDiv.textContent = `Compiled successfully (${payload.metrics.tokensPerSec} tok/s).`;
+    orb.setIdle();
+    cmdPalette.classList.remove('active');
+    cmdInput.value = '';
+  } else if (type === 'FALLBACK' || type === 'ERROR') {
+    currentMode = 'FALLBACK';
+    statusDiv.textContent = 'Using RULE-BASED FALLBACK.';
+    const flow = compileToFlow(cmdInput.value);
+    renderCortex(flow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
+    orb.setIdle();
+    cmdPalette.classList.remove('active');
+    cmdInput.value = '';
   }
-}
-initEngine();
+};
+
+// Start worker initialization
+worker.postMessage({ type: 'INIT_ENGINE' });
 
 // Command Palette Logic
 const cmdPalette = document.getElementById('cmd-palette');
@@ -105,31 +118,22 @@ document.addEventListener('keydown', (e) => {
 // Compiler Integration
 cmdInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && cmdInput.value.trim() !== '') {
-    console.log('[ORANGE] Enter pressed:', cmdInput.value);
     e.preventDefault();
-    statusDiv.textContent = 'Compiling...';
-    orb.pulse(0.8);
-    
-    setTimeout(() => {
-      let flow = compileToFlow(cmdInput.value);
-      const errors = validateFlow(flow);
-      if (errors.length > 0) {
-        statusDiv.textContent = `Validation errors: ${errors.join(', ')}. Repairing...`;
-        flow = repairFlow(flow, errors);
-      }
-      
-      renderCortex(flow);
-      statusDiv.textContent = 'Compiled successfully. Flow ready.';
-      cmdPalette.classList.remove('active');
-      cmdInput.value = '';
-    }, 600);
+    worker.postMessage({ type: 'COMPILE', payload: cmdInput.value });
   }
 });
-console.log('[ORANGE] Compiler listener active');
 
-function renderCortex(flow) {
+function renderCortex(flow, metrics) {
   if (!cortexDiv) return;
-  cortexDiv.innerHTML = `<pre style="text-align:left; font-size:0.8rem; color:var(--fg);">${JSON.stringify(flow, null, 2)}</pre>`;
+  const modeLabel = metrics.mode === 'LIVE' 
+    ? '<span style="color:#4ade80">[LIVE]</span>' 
+    : '<span style="color:#fbbf24">[RULE-BASED FALLBACK]</span>';
+  
+  const metricsHtml = metrics.mode === 'LIVE' 
+    ? `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s</div>`
+    : `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Metrics: Simulated (Fallback Mode)</div>`;
+
+  cortexDiv.innerHTML = `${modeLabel}${metricsHtml}<pre style="text-align:left; font-size:0.8rem; color:var(--fg); margin:0;">${JSON.stringify(flow, null, 2)}</pre>`;
   cortexDiv.style.display = 'block';
 }
 
