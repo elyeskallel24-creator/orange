@@ -45,6 +45,11 @@
     #easter-egg-overlay.active { display: grid; }
     #easter-egg-text { color: var(--accent); font-size: 1.5rem; max-width: 80%; line-height: 1.6; }
     #status { margin-top: 1rem; font-size: 0.9rem; color: var(--fg); opacity: 0.8; }
+    #cortex {
+      display: none; position: fixed; bottom: 2rem; right: 2rem; width: 300px; max-height: 40vh;
+      background: oklch(0.2 0.02 250); border: 1px solid var(--accent); border-radius: 8px;
+      padding: 1rem; overflow-y: auto; z-index: 50; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
   </style>
 </head>
 <body>
@@ -58,8 +63,9 @@
     </div>
   </main>
   <div id="cmd-palette">
-    <input type="text" id="cmd-input" placeholder="Describe an automation..." autocomplete="off">
+    <input type="text" id="cmd-input" placeholder="Describe an automation (e.g., 'fetch weather and summarize')..." autocomplete="off">
   </div>
+  <div id="cortex"></div>
   <div id="easter-egg-overlay">
     <p id="easter-egg-text"></p>
   </div>
