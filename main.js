@@ -1,5 +1,6 @@
 // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
 import { CreateMLCEngine } from 'web-llm';
+import { pipeline } from '@huggingface/transformers';
 
 console.log('%cORANGE', 'color: orange; font-size: 2rem; font-weight: bold;');
 console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #ccc;');
@@ -61,23 +62,45 @@ class LivingOrb {
 const canvas = document.getElementById('orb');
 const orb = new LivingOrb(canvas);
 
-// WebLLM Engine
-let engine = null;
+// Engine State
+let webLLMEngine = null;
+let transformersPipeline = null;
+
 async function initEngine() {
   try {
+    statusDiv.textContent = 'Checking WebGPU support...';
+    if (!navigator.gpu) {
+      throw new Error('WebGPU not supported by browser');
+    }
     statusDiv.textContent = 'Loading WebGPU engine...';
-    // Using a small Qwen model for fast startup. UNVERIFIED: Check latest model ID on https://github.com/mlc-ai/web-llm
-    engine = await CreateMLCEngine('Qwen2.5-0.5B-Instruct-q4f16_1-MLC', {
+    // UNVERIFIED: Check latest model ID on https://github.com/mlc-ai/web-llm
+    webLLMEngine = await CreateMLCEngine('Qwen2.5-0.5B-Instruct-q4f16_1-MLC', {
       initProgressCallback: (report) => {
-        statusDiv.textContent = `Loading model: ${Math.round(report.progress * 100)}%`;
+        statusDiv.textContent = `Loading WebGPU model: ${Math.round(report.progress * 100)}%`;
         orb.pulse(0.1);
       }
     });
-    statusDiv.textContent = 'Engine ready. Press Ctrl+K to compile.';
+    statusDiv.textContent = 'WebGPU Engine ready. Press Ctrl+K to compile.';
     console.log('WebLLM Engine initialized');
   } catch (e) {
-    statusDiv.textContent = 'WebGPU not supported. Fallback mode.';
-    console.error(e);
+    console.warn('WebGPU failed, falling back to WASM:', e);
+    statusDiv.textContent = 'WebGPU unavailable. Loading WASM fallback...';
+    try {
+      // UNVERIFIED: Check latest @huggingface/transformers version. Using Xenova Qwen2.5-0.5B for CPU.
+      transformersPipeline = await pipeline('text-generation', 'Xenova/Qwen2.5-0.5B-Instruct', {
+        progress_callback: (progress) => {
+          if (progress.status === 'progress') {
+            statusDiv.textContent = `Loading WASM model: ${Math.round(progress.progress * 100)}%`;
+            orb.pulse(0.1);
+          }
+        }
+      });
+      statusDiv.textContent = 'WASM Engine ready. Press Ctrl+K to compile.';
+      console.log('Transformers.js Engine initialized');
+    } catch (wasmError) {
+      statusDiv.textContent = 'Model loading failed. Check console.';
+      console.error('WASM fallback failed:', wasmError);
+    }
   }
 }
 initEngine();
