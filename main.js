@@ -65,12 +65,18 @@ class LivingOrb {
 const canvas = document.getElementById('orb');
 const orb = new LivingOrb(canvas);
 
-// Web Worker Setup
-const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-let currentMode = 'FALLBACK'; // Default to fallback until worker confirms LIVE
+// Isolated Engine Frame (Worker Equivalent to bypass CDN Node.js polyfill crashes)
+const engineFrame = document.createElement('iframe');
+engineFrame.src = './engine.html';
+engineFrame.style.display = 'none';
+document.body.appendChild(engineFrame);
 
-worker.onmessage = (e) => {
+let currentMode = 'FALLBACK';
+
+window.addEventListener('message', (e) => {
+  if (e.source !== engineFrame.contentWindow) return;
   const { type, payload } = e.data;
+  
   if (type === 'PROGRESS') {
     statusDiv.textContent = payload.status;
     orb.pulse(0.1);
@@ -87,19 +93,18 @@ worker.onmessage = (e) => {
     orb.setIdle();
     cmdPalette.classList.remove('active');
     cmdInput.value = '';
-  } else if (type === 'FALLBACK' || type === 'ERROR') {
+  } else if (type === 'FALLBACK' || type === 'ERROR' || type === 'RETRY') {
     currentMode = 'FALLBACK';
-    statusDiv.textContent = 'Using RULE-BASED FALLBACK.';
-    const flow = compileToFlow(cmdInput.value);
-    renderCortex(flow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
-    orb.setIdle();
-    cmdPalette.classList.remove('active');
-    cmdInput.value = '';
+    statusDiv.textContent = type === 'RETRY' ? payload.message : 'Using RULE-BASED FALLBACK.';
+    if (type !== 'RETRY') {
+      const flow = compileToFlow(cmdInput.value || 'default fallback flow');
+      renderCortex(flow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
+      orb.setIdle();
+      cmdPalette.classList.remove('active');
+      cmdInput.value = '';
+    }
   }
-};
-
-// Start worker initialization
-worker.postMessage({ type: 'INIT_ENGINE' });
+});
 
 // Command Palette Logic
 const cmdPalette = document.getElementById('cmd-palette');
@@ -119,7 +124,7 @@ document.addEventListener('keydown', (e) => {
 cmdInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && cmdInput.value.trim() !== '') {
     e.preventDefault();
-    worker.postMessage({ type: 'COMPILE', payload: cmdInput.value });
+    engineFrame.contentWindow.postMessage({ type: 'COMPILE', payload: cmdInput.value }, '*');
   }
 });
 
