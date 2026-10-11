@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORANGE</title>
+  <!-- EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything. -->
+  <style>
+    :root {
+      --bg: oklch(0.15 0.02 250);
+      --fg: oklch(0.95 0.01 250);
+      --accent: oklch(0.75 0.18 50);
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    main { flex: 1; display: grid; place-items: center; }
+    footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.8rem;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 style="color: var(--accent);">ORANGE</h1>
+  </main>
+  <footer>
+    made with love by Elyes Kallel with the spirit of BXB
+  </footer>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
