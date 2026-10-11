@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ORANGE</title>
   <!-- EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "web-llm": "https://esm.sh/@mlc-ai/web-llm@0.2.73"
+      }
+    }
+  </script>
   <style>
     :root {
       --bg: oklch(0.15 0.02 250);
@@ -36,6 +43,7 @@
     #easter-egg-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 999; place-items: center; text-align: center; }
     #easter-egg-overlay.active { display: grid; }
     #easter-egg-text { color: var(--accent); font-size: 1.5rem; max-width: 80%; line-height: 1.6; }
+    #status { margin-top: 1rem; font-size: 0.9rem; color: var(--fg); opacity: 0.8; }
   </style>
 </head>
 <body>
@@ -45,6 +53,7 @@
       <h1 style="color: var(--accent); cursor: pointer;" id="logo">ORANGE</h1>
       <p>Describe it. Orange compiles it. Watch it think.</p>
       <button id="open-cmd" style="margin-top: 1rem; background: var(--accent); color: var(--bg); border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold;">Open Command (Ctrl+K)</button>
+      <div id="status">Initializing engine...</div>
     </div>
   </main>
   <div id="cmd-palette">
