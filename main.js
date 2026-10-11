@@ -105,6 +105,7 @@ document.addEventListener('keydown', (e) => {
 // Compiler Integration
 cmdInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && cmdInput.value.trim() !== '') {
+    console.log('[ORANGE] Enter pressed:', cmdInput.value);
     e.preventDefault();
     statusDiv.textContent = 'Compiling...';
     orb.pulse(0.8);
@@ -121,9 +122,10 @@ cmdInput.addEventListener('keydown', (e) => {
       statusDiv.textContent = 'Compiled successfully. Flow ready.';
       cmdPalette.classList.remove('active');
       cmdInput.value = '';
-    }, 600); // Simulated thinking delay for wow factor
+    }, 600);
   }
 });
+console.log('[ORANGE] Compiler listener active');
 
 function renderCortex(flow) {
   if (!cortexDiv) return;
