@@ -138,6 +138,7 @@ cmdInput.addEventListener('keydown', (e) => {
 });
 
 function renderCortex(flow, metrics) {
+  console.log('[MODE]', metrics.mode);
   if (!cortexDiv) return;
   let modeLabel = '<span style="color:#fbbf24">[RULE-BASED FALLBACK]</span>';
   let metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Metrics: n/a (no model in this mode)</div>`;
