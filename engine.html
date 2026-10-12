@@ -13,7 +13,7 @@
 <body>
 <script type="module">
   // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
-  import { CreateMLCEngine } from 'web-llm';
+  import { CreateMLCEngine, prebuiltAppConfig } from 'web-llm';
   import { pipeline } from '@huggingface/transformers';
 
   const FLOW_SCHEMA = {
@@ -46,36 +46,59 @@
   let engine = null;
   let wasmPipeline = null;
   let currentMode = 'FALLBACK'; 
+  let selectedModelId = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
+  const MAX_RETRIES = 2;
+
+  function validateFlow(flow) {
+    if (!flow || typeof flow !== 'object') throw new Error('Flow is not an object');
+    if (!Array.isArray(flow.nodes)) throw new Error('Missing or invalid "nodes" array');
+    if (flow.nodes.length === 0) throw new Error('Nodes array is empty');
+    if (!Array.isArray(flow.edges)) throw new Error('Missing or invalid "edges" array');
+    
+    for (const node of flow.nodes) {
+      if (!node.id || typeof node.id !== 'string') throw new Error(`Node missing valid "id": ${JSON.stringify(node)}`);
+      if (!node.type || !FLOW_SCHEMA.properties.nodes.items.properties.type.enum.includes(node.type)) {
+        throw new Error(`Invalid node type "${node.type}" for node ${node.id}`);
+      }
+      if (!node.params || typeof node.params !== 'object') throw new Error(`Node ${node.id} missing valid "params"`);
+    }
+    return true;
+  }
 
   window.addEventListener('message', async (e) => {
     const { type, payload } = e.data;
 
     if (type === 'INIT_ENGINE') {
       try {
+        // Runtime model picker from prebuilt config
+        if (typeof prebuiltAppConfig !== 'undefined' && prebuiltAppConfig.model_list) {
+          const qwenModel = prebuiltAppConfig.model_list.find(m => m.model_id.includes('Qwen2.5-0.5B'));
+          if (qwenModel) selectedModelId = qwenModel.model_id;
+        }
+
         if (!navigator.gpu) throw new Error('WebGPU not supported by browser');
         
-        window.parent.postMessage({ type: 'PROGRESS', payload: { status: 'Loading WebGPU engine...', progress: 0 } });
-        engine = await CreateMLCEngine('Qwen2.5-0.5B-Instruct-q4f16_1-MLC', {
+        window.parent.postMessage({ type: 'PROGRESS', payload: { status: `Loading WebGPU engine (${selectedModelId})...`, progress: 0 } });
+        engine = await CreateMLCEngine(selectedModelId, {
           initProgressCallback: (report) => {
             window.parent.postMessage({ 
               type: 'PROGRESS', 
-              payload: { status: `Loading WebGPU model: ${Math.round(report.progress * 100)}%`, progress: report.progress } 
+              payload: { status: report.text || `Loading WebGPU model: ${Math.round(report.progress * 100)}%`, progress: report.progress } 
             });
           }
         });
         currentMode = 'LIVE_WEBGPU';
-        window.parent.postMessage({ type: 'READY', payload: { model: 'Qwen2.5-0.5B (WebGPU)', mode: 'LIVE' } });
+        window.parent.postMessage({ type: 'READY', payload: { model: `${selectedModelId} (WebGPU)`, mode: 'LIVE_WEBGPU' } });
       } catch (err) {
         console.warn('[ENGINE] WebGPU failed, falling back to WASM:', err);
         try {
           window.parent.postMessage({ type: 'PROGRESS', payload: { status: 'Loading WASM engine (CPU)...', progress: 0 } });
-          // Fixed: Using correct model ID that actually exists
           wasmPipeline = await pipeline('text-generation', 'onnx-community/Qwen2.5-0.5B-Instruct-ONNX', {
             progress_callback: (report) => {
               if (report.status === 'progress') {
                 window.parent.postMessage({ 
                   type: 'PROGRESS', 
-                  payload: { status: `Loading WASM model: ${Math.round(report.progress * 100)}%`, progress: report.progress } 
+                  payload: { status: report.text || `Loading WASM model: ${Math.round(report.progress * 100)}%`, progress: report.progress } 
                 });
               }
             }
@@ -97,60 +120,69 @@
       
       window.parent.postMessage({ type: 'STATUS', payload: 'Compiling with on-device LLM...' });
       
-      const prompt = `You are a workflow compiler. Convert this user request into a JSON workflow. 
-      Strictly follow this JSON schema: ${JSON.stringify(FLOW_SCHEMA)}. 
-      Output ONLY valid JSON, no markdown, no explanations.
-      User request: "${payload}"`;
+      let attempt = 0;
+      let lastError = '';
+      let success = false;
 
-      try {
-        const startTime = performance.now();
-        let replyText = '';
-        let tokens = 0;
+      while (attempt <= MAX_RETRIES && !success) {
+        const retryPrompt = attempt > 0 ? `\n\nPrevious attempt failed validation with error: "${lastError}". Please output ONLY the corrected valid JSON.` : '';
+        const prompt = `You are a workflow compiler. Convert this user request into a JSON workflow. 
+        Strictly follow this JSON schema: ${JSON.stringify(FLOW_SCHEMA)}. 
+        Output ONLY valid JSON, no markdown, no explanations.${retryPrompt}
+        User request: "${payload}"`;
 
-        if (engine) {
-          const reply = await engine.chat.completions.create({
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.1,
-          });
-          replyText = reply.choices[0].message.content;
-          tokens = reply.usage?.total_tokens || 0;
-        } else if (wasmPipeline) {
-          const output = await wasmPipeline(prompt, { max_new_tokens: 500, temperature: 0.1, do_sample: true });
-          const fullText = output[0].generated_text;
-          const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-          replyText = jsonMatch ? jsonMatch[0] : fullText;
-          tokens = Math.ceil(replyText.length / 4);
-        }
-
-        const endTime = performance.now();
-        const duration = (endTime - startTime) / 1000;
-        const tokensPerSec = tokens > 0 ? (tokens / duration).toFixed(1) : '-';
-
-        let flow;
         try {
-          const jsonStr = replyText.replace(/```json\n?|\n?```/g, '').trim();
-          flow = JSON.parse(jsonStr);
-          
-          if (!flow.nodes || !Array.isArray(flow.nodes) || flow.nodes.length === 0) {
-            throw new Error('Invalid schema: missing or empty nodes array');
+          const startTime = performance.now();
+          let replyText = '';
+          let tokens = 0;
+
+          if (engine) {
+            const reply = await engine.chat.completions.create({
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0.1,
+            });
+            replyText = reply.choices[0].message.content;
+            tokens = reply.usage?.total_tokens || 0;
+          } else if (wasmPipeline) {
+            const output = await wasmPipeline(prompt, { max_new_tokens: 500, temperature: 0.1, do_sample: true });
+            const fullText = output[0].generated_text;
+            const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+            replyText = jsonMatch ? jsonMatch[0] : fullText;
+            tokens = Math.ceil(replyText.length / 4);
           }
+
+          const endTime = performance.now();
+          const duration = (endTime - startTime) / 1000;
+          const tokensPerSec = tokens > 0 ? (tokens / duration).toFixed(1) : '-';
+
+          const jsonStr = replyText.replace(/```json\n?|\n?```/g, '').trim();
+          const flow = JSON.parse(jsonStr);
+          
+          validateFlow(flow);
           
           window.parent.postMessage({ 
             type: 'SUCCESS', 
             payload: { 
               flow, 
-              metrics: { tokens, duration: duration.toFixed(2), tokensPerSec, mode: currentMode } 
+              metrics: { tokens, duration: duration.toFixed(2), tokensPerSec, mode: currentMode, retries: attempt } 
             } 
           });
-        } catch (parseErr) {
-          window.parent.postMessage({ 
-            type: 'RETRY', 
-            payload: { message: 'Schema validation failed. Retrying...', attempt: 1, originalError: parseErr.message } 
-          });
+          success = true;
+        } catch (err) {
+          lastError = err.message;
+          attempt++;
+          if (attempt <= MAX_RETRIES) {
+            window.parent.postMessage({ 
+              type: 'RETRY', 
+              payload: { message: `Schema validation failed (Attempt ${attempt}/${MAX_RETRIES}). Retrying...`, attempt, originalError: lastError } 
+            });
+          } else {
+            window.parent.postMessage({ 
+              type: 'FALLBACK', 
+              payload: { message: `Max retries (${MAX_RETRIES}) reached. Falling back to rule-based compiler.` } 
+            });
+          }
         }
-      } catch (err) {
-        console.error('[ENGINE COMPILE ERROR]', err);
-        window.parent.postMessage({ type: 'ERROR', payload: { message: err.message } });
       }
     }
   });
