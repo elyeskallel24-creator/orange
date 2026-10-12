@@ -624,14 +624,6 @@
     .easter-egg-trigger { cursor: pointer; opacity: 0.3; transition: opacity var(--duration-normal); }
     .easter-egg-trigger:hover { opacity: 1; }
     
-    /* Easter Egg Overlay */
-    #easter-egg-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95);
-      z-index: 999; place-items: center; text-align: center;
-    }
-    #easter-egg-overlay.active { display: grid; }
-    #easter-egg-text { color: var(--accent); font-size: 1.25rem; max-width: 80%; line-height: 1.6; font-family: var(--font-mono); }
-    
     /* Responsive */
     @media (max-width: 768px) {
       .cortex-rail { width: 100%; top: auto; bottom: 0; height: 40vh; border-left: none; border-top: var(--hairline-width) solid var(--hairline); }
@@ -813,9 +805,11 @@
     </div>
   </div>
 
-  <!-- Easter Egg Overlay -->
-  <div id="easter-egg-overlay" role="dialog" aria-modal="true" aria-label="Easter egg">
-    <p id="easter-egg-text"></p>
+  <!-- V5: gg33 Cinematic Overlay -->
+  <div id="gg33-cinematic" class="gg33-cinematic" role="dialog" aria-modal="true" aria-label="Easter egg cinematic">
+    <canvas id="gg33-canvas" class="gg33-canvas" width="300" height="150"></canvas>
+    <div class="gg33-static-33">33</div>
+    <p id="gg33-text" class="gg33-text"></p>
   </div>
 
   <footer role="contentinfo">
