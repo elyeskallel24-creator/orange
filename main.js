@@ -71,10 +71,14 @@ engineFrame.src = './engine.html';
 engineFrame.style.display = 'none';
 document.body.appendChild(engineFrame);
 
-// Trigger initialization once the iframe is fully loaded
-engineFrame.onload = () => {
-  engineFrame.contentWindow.postMessage({ type: 'INIT_ENGINE' }, '*');
+// Trigger initialization on load, with a timeout fallback for cached loads
+const sendInit = () => {
+  if (engineFrame.contentWindow) {
+    engineFrame.contentWindow.postMessage({ type: 'INIT_ENGINE' }, '*');
+  }
 };
+engineFrame.onload = sendInit;
+setTimeout(sendInit, 500);
 
 let currentMode = 'FALLBACK';
 
@@ -136,9 +140,9 @@ cmdInput.addEventListener('keydown', (e) => {
 function renderCortex(flow, metrics) {
   if (!cortexDiv) return;
   let modeLabel = '<span style="color:#fbbf24">[RULE-BASED FALLBACK]</span>';
-  let metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Metrics: Simulated (Fallback Mode)</div>`;
+  let metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Metrics: n/a (no model in this mode)</div>`;
   
-  if (metrics.mode === 'LIVE') {
+  if (metrics.mode === 'LIVE' || metrics.mode === 'LIVE_WEBGPU') {
     modeLabel = '<span style="color:#4ade80">[LIVE WebGPU]</span>';
     metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s</div>`;
   } else if (metrics.mode === 'LIVE_WASM') {
