@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ORANGE</title>
+  <link rel="manifest" href="./manifest.json">
   <!-- EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything. -->
   <script type="importmap">
     {
@@ -60,6 +61,9 @@
       margin-bottom: 1rem;
       padding-bottom: 0.5rem;
       border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     /* Pane 1: Prompt */
     .pane-prompt { display: flex; flex-direction: column; gap: 1rem; }
@@ -78,6 +82,21 @@
     }
     #cmd-input:focus { border-color: var(--border-active); }
     .hint { font-size: 0.75rem; color: var(--fg-muted); font-family: var(--font-mono); }
+    
+    .btn {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--fg-primary);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 2px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .btn:hover { border-color: var(--border-active); }
+    .btn-accent { background: var(--accent); color: var(--bg-primary); border-color: var(--accent); font-weight: bold; }
+    .btn-accent:hover { opacity: 0.9; }
 
     /* Pane 2: Flow */
     .pane-flow { position: relative; display: grid; place-items: center; }
@@ -93,7 +112,7 @@
       border-radius: 2px;
     }
 
-    /* Pane 3: Cortex */
+    /* Pane 3: Cortex / Library */
     .pane-cortex { font-family: var(--font-mono); font-size: 0.8rem; }
     #status { 
       padding: 0.5rem; 
@@ -110,6 +129,25 @@
       border-radius: 2px;
     }
     #cortex pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+    
+    .library-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .library-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      padding: 0.75rem;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .library-item:hover { border-color: var(--border-active); }
+    .library-item h4 { margin: 0 0 0.25rem 0; font-size: 0.85rem; color: var(--fg-primary); }
+    .library-item p { margin: 0; font-size: 0.75rem; color: var(--fg-muted); }
 
     /* Footer & Easter Egg */
     footer {
@@ -161,12 +199,16 @@
       <div class="flow-placeholder">
         DAG Visualization<br>
         <span style="font-size:0.7rem; opacity:0.6;">(Vertical slice: placeholder)</span>
-      </div a>
+      </div>
     </div>
     
     <div class="pane pane-cortex">
-      <div class="pane-header">Cortex / Metrics</div>
+      <div class="pane-header">
+        <span>Cortex / Library</span>
+        <button id="share-btn" class="btn" title="Copy shareable URL">Share</button>
+      </div>
       <div id="status">Initializing engine...</div>
+      <div id="library-container" class="library-list" style="display:none;"></div>
       <div id="cortex">
         <pre>Awaiting compilation...</pre>
       </div>
