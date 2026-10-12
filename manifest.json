@@ -1,0 +1,16 @@
+{
+  "name": "ORANGE Automation Studio",
+  "short_name": "ORANGE",
+  "description": "Local-first AI automation studio. Describe it, compile it, watch it think.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1f",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%23f97316'/></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
