@@ -517,26 +517,56 @@ function animateEdgeDots() {
 // Node click for Inspector
 stageContent.addEventListener('click', (e) => {
   const nodeEl = e.target.closest('.node');
-  if (!nodeEl || !runResults) return;
+  if (!nodeEl) return; // Allow click on example flow
+  
+  // Remove selected class from all nodes
+  document.querySelectorAll('.node--selected').forEach(n => {
+    n.classList.remove('node--selected');
+  });
+  
+  // If no run results yet, just highlight the node
+  if (!runResults) {
+    nodeEl.classList.add('node--selected');
+    return;
+  }
   
   const nodeId = nodeEl.dataset.nodeId;
   const nodeResult = runResults.nodes.find(n => n.id === nodeId);
   if (!nodeResult) return;
 
-  document.getElementById('inspector-node-id').textContent = nodeResult.id;
-  document.getElementById('inspector-node-type').textContent = nodeResult.type;
+  // Add selected class
+  nodeEl.classList.add('node--selected');
+
+  // Populate Inspector with actual values or fallbacks
+  document.getElementById('inspector-node-id').textContent = nodeResult.id || 'not available';
+  document.getElementById('inspector-node-type').textContent = nodeResult.type || 'not available';
   document.getElementById('inspector-prompt-phrase').textContent = 'N/A (not tracked yet)';
   document.getElementById('inspector-validator-status').textContent = 'schema-valid ✓';
-  document.getElementById('inspector-source-url').textContent = nodeResult.data?.url || 'N/A';
+  document.getElementById('inspector-source-url').textContent = nodeResult.data?.url || 'not available';
   document.getElementById('inspector-timestamp').textContent = new Date().toISOString();
   document.getElementById('inspector-latency').textContent = `${nodeResult.latency}ms`;
 
+  // Show inspector
+  inspectorDrawer.hidden = false;
   inspectorDrawer.classList.add('inspector-drawer--visible');
 });
 
+// Close Inspector when clicking outside or pressing Esc
 document.addEventListener('click', (e) => {
-  if (!inspectorDrawer.contains(e.target) && !e.target.closest('.node')) {
+  if (!inspectorDrawer.hidden && !inspectorDrawer.contains(e.target) && !e.target.closest('.node')) {
     inspectorDrawer.classList.remove('inspector-drawer--visible');
+    setTimeout(() => { inspectorDrawer.hidden = true; }, 420); // Wait for transition
+    // Return focus to stage
+    stageContent.focus();
+  }
+});
+
+// Esc key closes inspector
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !inspectorDrawer.hidden) {
+    inspectorDrawer.classList.remove('inspector-drawer--visible');
+    setTimeout(() => { inspectorDrawer.hidden = true; }, 420);
+    stageContent.focus();
   }
 });
 
