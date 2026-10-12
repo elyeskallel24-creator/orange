@@ -24,6 +24,22 @@ const railGen = document.getElementById('rail-gen');
 const railVal = document.getElementById('rail-val');
 const railRun = document.getElementById('rail-run');
 
+// V2: Node Pipeline
+const stageContent = document.getElementById('stage-content');
+const flowOrderedList = document.getElementById('flow-ordered-list');
+
+const NODE_GLYPHS = {
+  trigger: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  'http-get': '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+  output: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  transform: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  filter: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+  branch: '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  llm: '<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/>',
+  store: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+  notify: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'
+};
+
 // Initialize Lens Orb (40px, render on-demand)
 class LivingOrb {
   constructor(canvas) {
@@ -166,12 +182,14 @@ window.addEventListener('message', (e) => {
     statusDiv.textContent = `Compiled (${payload.metrics.tokensPerSec} tok/s).`;
     orb.setIdle();
     cmdInput.value = '';
-    exampleFlow.style.display = 'none';
+    renderFlow(payload.flow);
+    showValidationOk();
     updateShareURL();
   } else if (type === 'RETRY') {
     statusDiv.textContent = payload.message;
     railVal.textContent = `Retry ${payload.attempt}/2: ${payload.originalError}`;
     railVal.classList.remove('empty');
+    showValidationFail(payload.originalError, payload.attempt);
     orb.pulse(0.8);
   } else if (type === 'FALLBACK' || type === 'ERROR') {
     currentMode = 'FALLBACK';
@@ -180,9 +198,10 @@ window.addEventListener('message', (e) => {
     statusDiv.textContent = type === 'FALLBACK' ? payload.message : 'Error.';
     currentFlow = compileToFlow(cmdInput.value || 'default fallback flow');
     updateRailMetrics({ mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' }, 'fallback');
+    renderFlow(currentFlow);
+    showValidationFail('rule-based fallback', 0);
     orb.setIdle();
     cmdInput.value = '';
-    exampleFlow.style.display = 'none';
     updateShareURL();
     loadingScreen.classList.add('hidden');
   }
@@ -199,6 +218,123 @@ function updateRailMetrics(metrics, state) {
     railGen.classList.add('empty');
     railVal.textContent = 'rule-based fallback';
     railVal.classList.remove('empty');
+  }
+}
+
+function clearStage() {
+  const nodes = stageContent.querySelectorAll('.node, .edge-svg, .validation-msg');
+  nodes.forEach(n => n.remove());
+  flowOrderedList.innerHTML = '';
+}
+
+function renderFlow(flow) {
+  if (!flow || !flow.nodes) return;
+  clearStage();
+  exampleFlow.style.display = 'none';
+
+  flow.nodes.forEach((node, i) => {
+    const li = document.createElement('li');
+    li.textContent = `${i + 1}. ${node.type}: ${node.id}`;
+    flowOrderedList.appendChild(li);
+  });
+
+  flow.nodes.forEach((node, i) => {
+    const nodeEl = document.createElement('div');
+    nodeEl.className = 'node node--undeveloped';
+    nodeEl.dataset.nodeId = node.id;
+    nodeEl.setAttribute('role', 'listitem');
+    nodeEl.setAttribute('aria-label', `${node.type} node: ${node.id}`);
+
+    const glyphSVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    glyphSVG.setAttribute('class', 'node-glyph');
+    glyphSVG.setAttribute('viewBox', '0 0 24 24');
+    glyphSVG.setAttribute('fill', 'none');
+    glyphSVG.setAttribute('stroke', 'currentColor');
+    glyphSVG.setAttribute('stroke-width', '1.5');
+    glyphSVG.setAttribute('stroke-linecap', 'round');
+    glyphSVG.setAttribute('stroke-linejoin', 'round');
+    const glyphPath = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    glyphPath.innerHTML = NODE_GLYPHS[node.type] || NODE_GLYPHS.trigger;
+    glyphSVG.appendChild(glyphPath);
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'node-name';
+    nameEl.textContent = node.id;
+
+    const typeEl = document.createElement('span');
+    typeEl.className = 'node-type';
+    typeEl.textContent = node.type.toUpperCase();
+
+    const statusEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    statusEl.setAttribute('class', 'node-status');
+    statusEl.setAttribute('viewBox', '0 0 24 24');
+    statusEl.setAttribute('fill', 'none');
+    statusEl.setAttribute('stroke', 'currentColor');
+    statusEl.setAttribute('stroke-width', '2');
+
+    nodeEl.appendChild(glyphSVG);
+    nodeEl.appendChild(nameEl);
+    nodeEl.appendChild(typeEl);
+    nodeEl.appendChild(statusEl);
+    stageContent.appendChild(nodeEl);
+  });
+
+  if (flow.edges) {
+    flow.edges.forEach(edge => {
+      const edgeSVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      edgeSVG.setAttribute('class', 'edge-svg');
+      edgeSVG.style.cssText = 'position:static;width:80px;height:2px;align-self:center;';
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('class', 'edge-line');
+      line.setAttribute('x1', '0');
+      line.setAttribute('y1', '1');
+      line.setAttribute('x2', '80');
+      line.setAttribute('y2', '1');
+      edgeSVG.appendChild(line);
+      stageContent.appendChild(edgeSVG);
+    });
+  }
+
+  requestAnimationFrame(() => {
+    developNodes(flow);
+  });
+}
+
+function developNodes(flow) {
+  const nodes = stageContent.querySelectorAll('.node');
+  nodes.forEach((nodeEl, i) => {
+    setTimeout(() => {
+      nodeEl.classList.remove('node--undeveloped');
+      nodeEl.classList.add('node--developing');
+      setTimeout(() => {
+        nodeEl.classList.remove('node--developing');
+        nodeEl.classList.add('node--developed');
+        const edges = stageContent.querySelectorAll('.edge-line');
+        if (edges[i]) edges[i].classList.add('edge-line--drawn');
+      }, 220);
+    }, i * 120);
+  });
+}
+
+function showValidationFail(message, retryCount) {
+  const nodes = stageContent.querySelectorAll('.node');
+  nodes.forEach(n => {
+    n.classList.remove('node--developing', 'node--developed');
+    n.classList.add('node--failed');
+  });
+  const existing = stageContent.querySelector('.validation-msg');
+  if (existing) existing.remove();
+  const msg = document.createElement('div');
+  msg.className = 'validation-msg';
+  msg.textContent = `✗ ${message} (retry ${retryCount}/2)`;
+  stageContent.appendChild(msg);
+}
+
+function showValidationOk() {
+  const msg = stageContent.querySelector('.validation-msg');
+  if (msg) {
+    msg.textContent = '✓ schema-valid';
+    msg.classList.add('validation-msg--ok');
   }
 }
 
@@ -240,6 +376,7 @@ exampleFlow.addEventListener('click', () => {
     updateRailMetrics({ mode: 'REPLAY', tokens: '-', duration: '-', tokensPerSec: '-' }, 'fallback');
     railModel.textContent = 'Library Example';
     exampleFlow.style.display = 'none';
+    renderFlow(currentFlow);
     updateShareURL();
   }
 });
