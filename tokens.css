@@ -1,0 +1,53 @@
+/* EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything. */
+
+/* SAFELIGHT Design Tokens */
+:root {
+  /* Colors - OKLCH */
+  --bg: oklch(0.14 0.008 60);
+  --bg-surface: oklch(0.18 0.008 60);
+  --bg-raised: oklch(0.22 0.008 60);
+  --hairline: oklch(0.30 0.008 60);
+  --text: oklch(0.94 0.01 80);
+  --text-muted: oklch(0.68 0.01 80);
+  --accent: oklch(0.72 0.17 55);
+  --success: oklch(0.72 0.15 150);
+  --warning: oklch(0.75 0.15 80);
+  --error: oklch(0.65 0.20 25);
+  
+  /* Typography */
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-ui: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  
+  /* Spacing - 4px scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  
+  /* Geometry */
+  --radius-none: 0;
+  --radius-sm: 2px;
+  --hairline-width: 1px;
+  
+  /* Motion Tokens */
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --duration-slow: 420ms;
+  --easing-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Focus Ring */
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0.01ms;
+    --duration-normal: 0.01ms;
+    --duration-slow: 0.01ms;
+  }
+}
