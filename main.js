@@ -209,7 +209,6 @@ window.addEventListener('message', (e) => {
   if (type === 'PROGRESS') {
     if (!loadingScreen.classList.contains('hidden')) {
       loadingProgress.textContent = payload.status;
-      // Extract progress percentage if available
       const match = payload.status.match(/(\d+)%/);
       if (match) orb.setState(1, parseInt(match[1]) / 100);
     } else {
@@ -243,7 +242,7 @@ window.addEventListener('message', (e) => {
     railVal.textContent = `Retry ${payload.attempt}/2: ${payload.originalError}`;
     railVal.classList.remove('empty');
     showValidationFail(payload.originalError, payload.attempt);
-    orb.setState(3); // error state
+    orb.setState(3);
   } else if (type === 'FALLBACK' || type === 'ERROR') {
     currentMode = 'FALLBACK';
     modeChip.textContent = 'FALLBACK';
@@ -253,7 +252,7 @@ window.addEventListener('message', (e) => {
     updateRailMetrics({ mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' }, 'fallback');
     renderFlow(currentFlow);
     showValidationFail('rule-based fallback', 0);
-    orb.setState(3); // error state
+    orb.setState(3);
     cmdInput.value = '';
     updateShareURL();
     loadingScreen.classList.add('hidden');
@@ -615,7 +614,6 @@ function exportRunRecord() {
   statusDiv.textContent = 'Run Record exported.';
 }
 
-// Token Tape simulation (since engine returns full text, we animate it)
 let tapeInterval;
 function startTokenTape(text) {
   tokenTape.classList.add('token-tape--visible');
@@ -628,9 +626,9 @@ function startTokenTape(text) {
       i++;
     } else {
       clearInterval(tapeInterval);
-      tokenTape.innerHTML = text; // remove cursor at end
+      tokenTape.innerHTML = text;
     }
-  }, 10); // Simulate ~100 tok/s
+  }, 10);
 }
 
 function stopTokenTape() {
@@ -646,11 +644,10 @@ function compile() {
     cmdInput.focus();
     return;
   }
-  orb.setState(2); // generating
+  orb.setState(2);
   railGen.textContent = 'compiling...';
   railGen.classList.remove('empty');
   
-  // Simulate token tape during compilation (mocked since we don't have streaming yet)
   startTokenTape('{"nodes": [{"id": "node_0", "type": "trigger"... compiling...}');
   
   engineFrame.contentWindow.postMessage({ type: 'COMPILE', payload: prompt }, '*');
@@ -742,3 +739,14 @@ document.addEventListener('keydown', (e) => {
     if (typedChars.length > 10) typedChars = typedChars.slice(-10);
   }
 });
+
+// === V4: Global Function Exports ===
+window.openCmdPalette = openCmdPalette;
+window.closeCmdPalette = closeCmdPalette;
+window.startTokenTape = startTokenTape;
+window.stopTokenTape = stopTokenTape;
+window.exportRunRecord = exportRunRecord;
+window.orb = orb;
+window.runResults = runResults;
+window.currentFlow = currentFlow;
+window.currentMode = currentMode;
