@@ -69,7 +69,8 @@
         console.warn('[ENGINE] WebGPU failed, falling back to WASM:', err);
         try {
           window.parent.postMessage({ type: 'PROGRESS', payload: { status: 'Loading WASM engine (CPU)...', progress: 0 } });
-          wasmPipeline = await pipeline('text-generation', 'Xenova/Qwen2.5-0.5B-Instruct', {
+          // Fixed: Using correct model ID that actually exists
+          wasmPipeline = await pipeline('text-generation', 'onnx-community/Qwen2.5-0.5B-Instruct-ONNX', {
             progress_callback: (report) => {
               if (report.status === 'progress') {
                 window.parent.postMessage({ 
