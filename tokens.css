@@ -6,6 +6,7 @@
   --bg: oklch(0.14 0.008 60);
   --bg-surface: oklch(0.18 0.008 60);
   --bg-raised: oklch(0.22 0.008 60);
+  --stage-bg: oklch(0.10 0.005 60);
   --hairline: oklch(0.30 0.008 60);
   --text: oklch(0.94 0.01 80);
   --text-muted: oklch(0.68 0.01 80);
@@ -31,6 +32,15 @@
   --radius-none: 0;
   --radius-sm: 2px;
   --hairline-width: 1px;
+  --top-bar-height: 56px;
+  
+  /* Layout - V1 */
+  --rail-width: 320px;
+  --rail-collapsed-width: 48px;
+  --cmd-line-max-width: 720px;
+  --lens-size: 40px;
+  --node-width: 220px;
+  --node-height: 120px;
   
   /* Motion Tokens */
   --duration-fast: 120ms;
@@ -41,31 +51,23 @@
   
   /* Focus Ring */
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
-  
-  /* Layout - NEW for V1 */
-  --stage-bg: oklch(0.10 0.005 60);
-  --rail-width: 320px;
-  --rail-collapsed-width: 48px;
-  --cmd-line-max-width: 720px;
-  --lens-size: 40px;
-  --node-width: 220px;
-  --node-height: 120px;
 }
 
-/* Font Faces - CORRECTED PATHS */
+/* Font Faces */
 @font-face {
-  font-family: 'Geist';
-  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/Geist/Geist-VariableFont_wght.ttf') format('truetype');
-  font-weight: 100 900;
+  font-family: 'Instrument Serif';
+  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/Instrument_Serif/InstrumentSerif-Regular.ttf') format('truetype'),
+       url('https://fonts.gstatic.com/s/instrumentserif/v1/jizDREVItHgc8qDIbSTKq4XIZRa.woff2') format('woff2');
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
   font-family: 'Geist';
-  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/Geist/Geist-Italic-VariableFont_wght.ttf') format('truetype');
+  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/Geist/Geist-VariableFont_wght.ttf') format('truetype');
   font-weight: 100 900;
-  font-style: italic;
+  font-style: normal;
   font-display: swap;
 }
 
@@ -77,16 +79,6 @@
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'JetBrains Mono';
-  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/JetBrains_Mono/JetBrainsMono-Italic-VariableFont_wght.ttf') format('truetype');
-  font-weight: 100 900;
-  font-style: italic;
-  font-display: swap;
-}
-
-/* Add Instrument Serif @font-face once you confirm the exact path */
-
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   :root {
@@ -94,4 +86,11 @@
     --duration-normal: 0.01ms;
     --duration-slow: 0.01ms;
   }
+}
+
+/* Utilities */
+.dot-grid {
+  background-color: var(--stage-bg);
+  background-image: radial-gradient(var(--hairline) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
