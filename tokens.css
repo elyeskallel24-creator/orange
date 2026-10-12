@@ -675,3 +675,33 @@
   font-family: var(--font-mono);
   text-align: center;
 }
+
+/* Cortex Rail - outside media queries for desktop */
+.cortex-rail {
+  position: fixed;
+  right: 0;
+  top: var(--top-bar-height);
+  bottom: 0;
+  width: var(--rail-width);
+  min-width: var(--rail-width); /* ADDED: Prevent shrinking */
+  background: var(--bg-surface);
+  border-left: var(--hairline-width) solid var(--hairline);
+  padding: var(--space-4);
+  overflow-y: auto;
+  z-index: 10;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+.rail-section { margin-bottom: var(--space-6); }
+.rail-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+.rail-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.rail-value.empty { color: var(--text-muted); font-style: italic; }
