@@ -823,12 +823,14 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// === V4: Global Function Exports ===
+// === V4+V5: Global Function Exports ===
 window.openCmdPalette = openCmdPalette;
 window.closeCmdPalette = closeCmdPalette;
 window.startTokenTape = startTokenTape;
 window.stopTokenTape = stopTokenTape;
 window.exportRunRecord = exportRunRecord;
+window.showGg33Cinematic = showGg33Cinematic;
+window.hideGg33Cinematic = hideGg33Cinematic;
 window.orb = orb;
 window.runResults = runResults;
 window.currentFlow = currentFlow;
