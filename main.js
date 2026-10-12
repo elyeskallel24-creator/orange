@@ -101,15 +101,22 @@ window.addEventListener('message', (e) => {
     statusDiv.textContent = `Compiled successfully (${payload.metrics.tokensPerSec} tok/s).`;
     orb.setIdle();
     cmdInput.value = '';
-  } else if (type === 'FALLBACK' || type === 'ERROR' || type === 'RETRY') {
-    currentMode = 'FALLBACK';
-    statusDiv.textContent = type === 'RETRY' ? payload.message : 'Using RULE-BASED FALLBACK.';
-    if (type !== 'RETRY') {
-      const flow = compileToFlow(cmdInput.value || 'default fallback flow');
-      renderCortex(flow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
-      orb.setIdle();
-      cmdInput.value = '';
+  } else if (type === 'RETRY') {
+    statusDiv.textContent = payload.message;
+    orb.pulse(0.8);
+    if (cortexDiv) {
+      const retryDiv = document.createElement('div');
+      retryDiv.style.cssText = 'color:var(--warning); font-size:0.75rem; margin-bottom:0.5rem; border-left:2px solid var(--warning); padding-left:0.5rem;';
+      retryDiv.textContent = `⚠️ ${payload.message} Error: ${payload.originalError}`;
+      cortexDiv.appendChild(retryDiv);
     }
+  } else if (type === 'FALLBACK' || type === 'ERROR') {
+    currentMode = 'FALLBACK';
+    statusDiv.textContent = type === 'FALLBACK' ? payload.message : 'Using RULE-BASED FALLBACK.';
+    const flow = compileToFlow(cmdInput.value || 'default fallback flow');
+    renderCortex(flow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
+    orb.setIdle();
+    cmdInput.value = '';
   }
 });
 
@@ -118,6 +125,8 @@ cmdInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && cmdInput.value.trim() !== '') {
     e.preventDefault();
     orb.pulse(0.5);
+    // Clear previous cortex state on new compile
+    if (cortexDiv) cortexDiv.innerHTML = '';
     engineFrame.contentWindow.postMessage({ type: 'COMPILE', payload: cmdInput.value }, '*');
   }
 });
@@ -140,12 +149,14 @@ function renderCortex(flow, metrics) {
   let modeLabel = '<span style="color:var(--warning)">[RULE-BASED FALLBACK]</span>';
   let metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Metrics: n/a (no model in this mode)</div>`;
   
-  if (metrics.mode === 'LIVE' || metrics.mode === 'LIVE_WEBGPU') {
+  if (metrics.mode === 'LIVE_WEBGPU') {
     modeLabel = '<span style="color:var(--success)">[LIVE WebGPU]</span>';
-    metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s</div>`;
+    const retryText = metrics.retries > 0 ? ` | Retries: ${metrics.retries}` : '';
+    metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s${retryText}</div>`;
   } else if (metrics.mode === 'LIVE_WASM') {
     modeLabel = '<span style="color:#60a5fa">[LIVE WASM]</span>';
-    metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Tokens: ~${metrics.tokens} | Time: ${metrics.duration}s | Speed: ~${metrics.tokensPerSec} tok/s (Est.)</div>`;
+    const retryText = metrics.retries > 0 ? ` | Retries: ${metrics.retries}` : '';
+    metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Tokens: ~${metrics.tokens} | Time: ${metrics.duration}s | Speed: ~${metrics.tokensPerSec} tok/s (Est.)${retryText}</div>`;
   }
 
   cortexDiv.innerHTML = `${modeLabel}${metricsHtml}<pre style="color:var(--fg-primary);">${JSON.stringify(flow, null, 2)}</pre>`;
