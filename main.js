@@ -1,6 +1,7 @@
 // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
 import { compileToFlow } from './compiler.js';
 import { DEMO_FLOWS } from './library.js';
+import { runFlow } from './runtime.js';
 
 console.log('%cORANGE', 'color: orange; font-size: 2rem; font-weight: bold;');
 console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #ccc;');
@@ -27,6 +28,16 @@ const railRun = document.getElementById('rail-run');
 // V2: Node Pipeline
 const stageContent = document.getElementById('stage-content');
 const flowOrderedList = document.getElementById('flow-ordered-list');
+
+// V3: Run Engine
+const runBtn = document.getElementById('run-btn');
+const resultsTray = document.getElementById('results-tray');
+const resultsContent = document.getElementById('results-content');
+const resultsClose = document.getElementById('results-close');
+const inspectorDrawer = document.getElementById('inspector-drawer');
+
+let isRunning = false;
+let runResults = null;
 
 const NODE_GLYPHS = {
   trigger: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
@@ -184,6 +195,7 @@ window.addEventListener('message', (e) => {
     cmdInput.value = '';
     renderFlow(payload.flow);
     showValidationOk();
+    runBtn.style.display = 'inline-flex';
     updateShareURL();
   } else if (type === 'RETRY') {
     statusDiv.textContent = payload.message;
@@ -337,6 +349,161 @@ function showValidationOk() {
     msg.classList.add('validation-msg--ok');
   }
 }
+
+// === V3: Run Engine ===
+runBtn.addEventListener('click', executeFlow);
+resultsClose.addEventListener('click', () => {
+  resultsTray.classList.remove('results-tray--visible');
+});
+
+async function executeFlow() {
+  if (!currentFlow || isRunning) return;
+  isRunning = true;
+  runBtn.disabled = true;
+  runBtn.textContent = 'Running...';
+  railRun.textContent = 'executing...';
+  railRun.classList.remove('empty');
+
+  // Show running state on nodes
+  const nodes = stageContent.querySelectorAll('.node');
+  const latencyTimers = [];
+  nodes.forEach((nodeEl, i) => {
+    const timer = document.createElement('div');
+    timer.className = 'node-latency node-latency--running';
+    timer.textContent = '0ms';
+    nodeEl.appendChild(timer);
+    latencyTimers.push({ el: timer, start: performance.now() });
+  });
+
+  // Update timers every 50ms
+  const timerInterval = setInterval(() => {
+    latencyTimers.forEach(({ el, start }) => {
+      el.textContent = `${Math.round(performance.now() - start)}ms`;
+    });
+  }, 50);
+
+  try {
+    runResults = await runFlow(currentFlow);
+    clearInterval(timerInterval);
+    
+    // Update nodes with final latency
+    latencyTimers.forEach(({ el }, i) => {
+      if (runResults.nodes[i]) {
+        el.textContent = `${runResults.nodes[i].latency}ms`;
+        el.classList.remove('node-latency--running');
+      }
+    });
+
+    // Show results tray
+    renderResults(runResults);
+    resultsTray.classList.add('results-tray--visible');
+    
+    // Update rail
+    railRun.textContent = `${runResults.totalLatency}ms total`;
+    railRun.classList.remove('empty');
+
+    // Animate edge dots
+    animateEdgeDots();
+  } catch (err) {
+    clearInterval(timerInterval);
+    railRun.textContent = `error: ${err.message}`;
+  } finally {
+    isRunning = false;
+    runBtn.disabled = false;
+    runBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run';
+  }
+}
+
+function renderResults(results) {
+  resultsContent.innerHTML = '';
+  results.nodes.forEach(node => {
+    const nodeDiv = document.createElement('div');
+    nodeDiv.className = 'results-node';
+    
+    const header = document.createElement('div');
+    header.className = 'results-node-header';
+    
+    const id = document.createElement('div');
+    id.className = 'results-node-id';
+    id.textContent = node.id;
+    
+    const latency = document.createElement('div');
+    latency.className = 'results-node-latency';
+    latency.textContent = `${node.latency}ms`;
+    
+    const status = document.createElement('div');
+    status.className = `results-node-status results-node-status--${node.status}`;
+    status.textContent = node.status;
+    
+    header.appendChild(id);
+    header.appendChild(latency);
+    header.appendChild(status);
+    nodeDiv.appendChild(header);
+
+    if (node.data) {
+      const data = document.createElement('div');
+      data.className = 'results-node-data';
+      data.textContent = typeof node.data === 'object' 
+        ? JSON.stringify(node.data, null, 2) 
+        : node.data;
+      nodeDiv.appendChild(data);
+    }
+
+    if (node.error) {
+      const error = document.createElement('div');
+      error.className = 'results-node-data';
+      error.style.color = 'var(--error)';
+      error.textContent = node.error;
+      nodeDiv.appendChild(error);
+    }
+
+    resultsContent.appendChild(nodeDiv);
+  });
+}
+
+function animateEdgeDots() {
+  const edges = stageContent.querySelectorAll('.edge-svg');
+  edges.forEach(edge => {
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('class', 'edge-dot edge-dot--active');
+    dot.setAttribute('cx', '0');
+    dot.setAttribute('cy', '1');
+    edge.appendChild(dot);
+    
+    // Remove dot after animation
+    setTimeout(() => {
+      dot.remove();
+    }, 1000);
+  });
+}
+
+// Node click for Inspector
+stageContent.addEventListener('click', (e) => {
+  const nodeEl = e.target.closest('.node');
+  if (!nodeEl || !runResults) return;
+  
+  const nodeId = nodeEl.dataset.nodeId;
+  const nodeResult = runResults.nodes.find(n => n.id === nodeId);
+  if (!nodeResult) return;
+
+  // Populate Inspector
+  document.getElementById('inspector-node-id').textContent = nodeResult.id;
+  document.getElementById('inspector-node-type').textContent = nodeResult.type;
+  document.getElementById('inspector-prompt-phrase').textContent = 'N/A (not tracked yet)';
+  document.getElementById('inspector-validator-status').textContent = 'schema-valid ✓';
+  document.getElementById('inspector-source-url').textContent = nodeResult.data?.url || 'N/A';
+  document.getElementById('inspector-timestamp').textContent = new Date().toISOString();
+  document.getElementById('inspector-latency').textContent = `${nodeResult.latency}ms`;
+
+  inspectorDrawer.classList.add('inspector-drawer--visible');
+});
+
+// Close Inspector when clicking outside
+document.addEventListener('click', (e) => {
+  if (!inspectorDrawer.contains(e.target) && !e.target.closest('.node')) {
+    inspectorDrawer.classList.remove('inspector-drawer--visible');
+  }
+});
 
 function compile() {
   const prompt = cmdInput.value.trim();
