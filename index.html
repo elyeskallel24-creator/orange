@@ -741,6 +741,8 @@
         Run
       </button>
     </div>
+    <!-- V4: Token Tape -->
+    <div id="token-tape" class="token-tape" aria-live="polite"></div>
   </div>
 
   <!-- Results Tray -->
@@ -781,6 +783,14 @@
     <div class="inspector-section">
       <div class="inspector-label">Latency</div>
       <div id="inspector-latency" class="inspector-value inspector-value--mono"></div>
+    </div>
+  </div>
+
+  <!-- V4: Command Palette -->
+  <div id="cmd-palette-overlay" class="cmd-palette-overlay" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="cmd-palette">
+      <input type="text" id="cmd-palette-input" class="cmd-palette-input" placeholder="Type a command..." autocomplete="off">
+      <ul id="cmd-palette-list" class="cmd-palette-list" role="listbox"></ul>
     </div>
   </div>
 
