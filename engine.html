@@ -4,7 +4,7 @@
   <script type="importmap">
     {
       "imports": {
-        "web-llm": "https://esm.sh/@mlc-ai/web-llm@0.2.73",
+        "web-llm": "https://unpkg.com/@mlc-ai/web-llm@0.2.73/lib/index.js",
         "@huggingface/transformers": "https://esm.sh/@huggingface/transformers@3.0.0"
       }
     }
@@ -118,7 +118,7 @@
           const fullText = output[0].generated_text;
           const jsonMatch = fullText.match(/\{[\s\S]*\}/);
           replyText = jsonMatch ? jsonMatch[0] : fullText;
-          tokens = Math.ceil(replyText.length / 4); // Rough estimate for WASM
+          tokens = Math.ceil(replyText.length / 4);
         }
 
         const endTime = performance.now();
