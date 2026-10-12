@@ -6,6 +6,7 @@ console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #
 
 const statusDiv = document.getElementById('status');
 const cortexDiv = document.getElementById('cortex');
+const cmdInput = document.getElementById('cmd-input');
 
 // Initialize Orb
 class LivingOrb {
@@ -65,13 +66,12 @@ class LivingOrb {
 const canvas = document.getElementById('orb');
 const orb = new LivingOrb(canvas);
 
-// Isolated Engine Frame (Worker Equivalent to bypass CDN Node.js polyfill crashes)
+// Isolated Engine Frame
 const engineFrame = document.createElement('iframe');
 engineFrame.src = './engine.html';
 engineFrame.style.display = 'none';
 document.body.appendChild(engineFrame);
 
-// Trigger initialization on load, with a timeout fallback for cached loads
 const sendInit = () => {
   if (engineFrame.contentWindow) {
     engineFrame.contentWindow.postMessage({ type: 'INIT_ENGINE' }, '*');
@@ -91,7 +91,7 @@ window.addEventListener('message', (e) => {
     orb.pulse(0.1);
   } else if (type === 'READY') {
     currentMode = payload.mode;
-    statusDiv.textContent = `LIVE: ${payload.model} ready. Press Ctrl+K.`;
+    statusDiv.textContent = `LIVE: ${payload.model} ready.`;
     orb.setIdle();
   } else if (type === 'STATUS') {
     statusDiv.textContent = payload;
@@ -100,7 +100,6 @@ window.addEventListener('message', (e) => {
     renderCortex(payload.flow, payload.metrics);
     statusDiv.textContent = `Compiled successfully (${payload.metrics.tokensPerSec} tok/s).`;
     orb.setIdle();
-    cmdPalette.classList.remove('active');
     cmdInput.value = '';
   } else if (type === 'FALLBACK' || type === 'ERROR' || type === 'RETRY') {
     currentMode = 'FALLBACK';
@@ -109,50 +108,47 @@ window.addEventListener('message', (e) => {
       const flow = compileToFlow(cmdInput.value || 'default fallback flow');
       renderCortex(flow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
       orb.setIdle();
-      cmdPalette.classList.remove('active');
       cmdInput.value = '';
     }
   }
-});
-
-// Command Palette Logic
-const cmdPalette = document.getElementById('cmd-palette');
-const cmdInput = document.getElementById('cmd-input');
-
-function toggleCmd() {
-  cmdPalette.classList.toggle('active');
-  if (cmdPalette.classList.contains('active')) { cmdInput.focus(); orb.pulse(0.5); }
-}
-document.getElementById('open-cmd').addEventListener('click', toggleCmd);
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); toggleCmd(); }
-  if (e.key === 'Escape') { cmdPalette.classList.remove('active'); hideEasterEgg(); }
 });
 
 // Compiler Integration
 cmdInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && cmdInput.value.trim() !== '') {
     e.preventDefault();
+    orb.pulse(0.5);
     engineFrame.contentWindow.postMessage({ type: 'COMPILE', payload: cmdInput.value }, '*');
   }
 });
 
+// Ctrl+K focuses the inline input
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { 
+    e.preventDefault(); 
+    cmdInput.focus(); 
+    orb.pulse(0.5);
+  }
+  if (e.key === 'Escape') { 
+    cmdInput.blur(); 
+    hideEasterEgg(); 
+  }
+});
+
 function renderCortex(flow, metrics) {
-  console.log('[MODE]', metrics.mode);
   if (!cortexDiv) return;
-  let modeLabel = '<span style="color:#fbbf24">[RULE-BASED FALLBACK]</span>';
-  let metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Metrics: n/a (no model in this mode)</div>`;
+  let modeLabel = '<span style="color:var(--warning)">[RULE-BASED FALLBACK]</span>';
+  let metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Metrics: n/a (no model in this mode)</div>`;
   
   if (metrics.mode === 'LIVE' || metrics.mode === 'LIVE_WEBGPU') {
-    modeLabel = '<span style="color:#4ade80">[LIVE WebGPU]</span>';
-    metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s</div>`;
+    modeLabel = '<span style="color:var(--success)">[LIVE WebGPU]</span>';
+    metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s</div>`;
   } else if (metrics.mode === 'LIVE_WASM') {
     modeLabel = '<span style="color:#60a5fa">[LIVE WASM]</span>';
-    metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Tokens: ~${metrics.tokens} | Time: ${metrics.duration}s | Speed: ~${metrics.tokensPerSec} tok/s (Estimated)</div>`;
+    metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Tokens: ~${metrics.tokens} | Time: ${metrics.duration}s | Speed: ~${metrics.tokensPerSec} tok/s (Est.)</div>`;
   }
 
-  cortexDiv.innerHTML = `${modeLabel}${metricsHtml}<pre style="text-align:left; font-size:0.8rem; color:var(--fg); margin:0;">${JSON.stringify(flow, null, 2)}</pre>`;
-  cortexDiv.style.display = 'block';
+  cortexDiv.innerHTML = `${modeLabel}${metricsHtml}<pre style="color:var(--fg-primary);">${JSON.stringify(flow, null, 2)}</pre>`;
 }
 
 // Easter Egg Logic
