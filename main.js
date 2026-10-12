@@ -42,6 +42,13 @@ const cmdPaletteInput = document.getElementById('cmd-palette-input');
 const cmdPaletteList = document.getElementById('cmd-palette-list');
 const tokenTape = document.getElementById('token-tape');
 
+// V5: gg33 Cinematic
+const gg33Cinematic = document.getElementById('gg33-cinematic');
+const gg33Canvas = document.getElementById('gg33-canvas');
+const gg33Text = document.getElementById('gg33-text');
+let gg33Particles = [];
+let gg33AnimationId = null;
+
 let isRunning = false;
 let runResults = null;
 let isCmdPaletteOpen = false;
@@ -671,7 +678,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { 
     cmdInput.blur(); 
     closeCmdPalette();
-    hideEasterEgg(); 
+    hideGg33Cinematic(); 
     closeAbout(); 
   }
 });
@@ -711,36 +718,107 @@ function updateShareURL() {
   } catch (e) { console.warn('Share URL encode failed', e); }
 }
 
-// Easter Egg Logic
-const eeOverlay = document.getElementById('easter-egg-overlay');
-const eeText = document.getElementById('easter-egg-text');
-let logoClicks = 0, typedChars = '';
+// === V5: gg33 Cinematic Logic ===
+function initGg33Particles() {
+  gg33Particles = [];
+  const ctx = gg33Canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 80px monospace';
+  ctx.fillText('33', 100, 100);
+  const imageData = ctx.getImageData(0, 0, 300, 150);
+  
+  for (let y = 0; y < 150; y += 4) {
+    for (let x = 0; x < 300; x += 4) {
+      const alpha = imageData.data[(y * 300 + x) * 4 + 3];
+      if (alpha > 128) {
+        gg33Particles.push({
+          x: Math.random() * 300,
+          y: Math.random() * 150,
+          targetX: x,
+          targetY: y,
+          vx: 0,
+          vy: 0
+        });
+      }
+    }
+  }
+}
 
-function showEasterEgg() {
-  orb.triggerEasterEgg();
-  eeOverlay.classList.add('active');
+function animateGg33Particles() {
+  const ctx = gg33Canvas.getContext('2d');
+  ctx.clearRect(0, 0, 300, 150);
+  ctx.fillStyle = 'oklch(0.72 0.17 55)'; // accent color
+  
+  let allSettled = true;
+  gg33Particles.forEach(p => {
+    const dx = p.targetX - p.x;
+    const dy = p.targetY - p.y;
+    p.vx += dx * 0.05;
+    p.vy += dy * 0.05;
+    p.vx *= 0.8;
+    p.vy *= 0.8;
+    p.x += p.vx;
+    p.y += p.vy;
+    
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) allSettled = false;
+    
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  
+  if (!allSettled) {
+    gg33AnimationId = requestAnimationFrame(animateGg33Particles);
+  } else {
+    typeGg33Text();
+  }
+}
+
+function typeGg33Text() {
   const msg = "One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.";
-  eeText.textContent = ''; 
+  gg33Text.textContent = '';
   let i = 0;
-  const interval = setInterval(() => { 
-    eeText.textContent += msg.charAt(i); 
-    i++; 
-    if (i >= msg.length) clearInterval(interval); 
+  const interval = setInterval(() => {
+    gg33Text.textContent += msg.charAt(i);
+    i++;
+    if (i >= msg.length) clearInterval(interval);
   }, 30);
 }
-function hideEasterEgg() { orb.hideEasterEgg(); eeOverlay.classList.remove('active'); }
+
+function showGg33Cinematic() {
+  gg33Cinematic.classList.add('active');
+  
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (prefersReducedMotion) {
+    gg33Text.textContent = "One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.";
+    return;
+  }
+  
+  initGg33Particles();
+  animateGg33Particles();
+}
+
+function hideGg33Cinematic() {
+  gg33Cinematic.classList.remove('active');
+  if (gg33AnimationId) {
+    cancelAnimationFrame(gg33AnimationId);
+    gg33AnimationId = null;
+  }
+}
+
+let logoClicks = 0, typedChars = '';
 
 document.getElementById('logo').addEventListener('click', () => {
-  logoClicks++; 
-  if (logoClicks === 3) { showEasterEgg(); logoClicks = 0; }
+  logoClicks++;
+  if (logoClicks === 3) { showGg33Cinematic(); logoClicks = 0; }
   setTimeout(() => { logoClicks = 0; }, 1000);
 });
-document.getElementById('ee-trigger').addEventListener('click', showEasterEgg);
-document.getElementById('ee-trigger').addEventListener('keypress', (e) => { if (e.key === 'Enter') showEasterEgg(); });
+document.getElementById('ee-trigger').addEventListener('click', showGg33Cinematic);
+document.getElementById('ee-trigger').addEventListener('keypress', (e) => { if (e.key === 'Enter') showGg33Cinematic(); });
 document.addEventListener('keydown', (e) => {
   if (e.key.length === 1) {
     typedChars += e.key.toLowerCase();
-    if (typedChars.includes('gg33')) { showEasterEgg(); typedChars = ''; }
+    if (typedChars.includes('gg33')) { showGg33Cinematic(); typedChars = ''; }
     if (typedChars.length > 10) typedChars = typedChars.slice(-10);
   }
 });
