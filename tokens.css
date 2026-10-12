@@ -88,18 +88,47 @@
 
 /* === V2: Node Pipeline === */
 .stage-content {
-  position: relative;
+  position: relative; /* ADDED: Anchor for example label */
   display: flex;
   align-items: center;
   gap: var(--space-8);
   padding: var(--space-8);
 }
 
+.example-flow {
+  position: relative; /* ADDED: Anchor for example label */
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  cursor: pointer;
+  padding: var(--space-6);
+  border: var(--hairline-width) dashed var(--hairline);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--duration-normal) var(--easing-out);
+}
+.example-flow:hover { border-color: var(--accent); }
+
+.example-label {
+  position: absolute;
+  top: 0; /* CHANGED: Was -10px, now attached to box */
+  left: 0; /* CHANGED: Was var(--space-4), now attached to box */
+  background: var(--bg-surface); /* CHANGED: Was var(--stage-bg) */
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius-sm);
+  z-index: 1;
+}
+
 .node {
   width: var(--node-width);
   height: var(--node-height);
   background: var(--bg-surface);
-  border: var(--hairline-width) solid var(--hairline);
+  border: var(--hairline-width) solid var(--hairline); /* DEFAULT: hairline */
   border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
@@ -151,7 +180,7 @@
   color: var(--text-muted);
 }
 
-/* Develop states */
+/* Develop states - NO orange border */
 .node--undeveloped {
   filter: blur(3px) brightness(0.35);
   opacity: 0.25;
@@ -165,7 +194,8 @@
 .node--developed {
   filter: blur(0) brightness(1);
   opacity: 1;
-  border-color: var(--accent);
+  /* REMOVED: border-color: var(--accent); */
+  /* Only .node--selected gets orange border */
 }
 
 .node--developed::after {
@@ -191,7 +221,7 @@
 
 .node--failed .node-status { color: var(--error); }
 
-/* Selected node */
+/* Selected node - ONLY this gets orange */
 .node--selected {
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
@@ -393,7 +423,7 @@
   overflow-y: auto;
 }
 
-/* Inspector drawer */
+/* Inspector - hidden by default */
 .inspector-drawer {
   position: fixed;
   right: var(--rail-width);
@@ -407,10 +437,15 @@
   transform: translateX(100%);
   transition: transform var(--duration-slow) var(--easing-out);
   z-index: 15;
+  /* ADDED: Hidden by default */
+  display: none;
 }
+
 .inspector-drawer--visible {
   transform: translateX(0);
+  display: block; /* ADDED: Show when visible class added */
 }
+
 .inspector-section {
   margin-bottom: var(--space-6);
 }
