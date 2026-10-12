@@ -71,6 +71,11 @@ engineFrame.src = './engine.html';
 engineFrame.style.display = 'none';
 document.body.appendChild(engineFrame);
 
+// Trigger initialization once the iframe is fully loaded
+engineFrame.onload = () => {
+  engineFrame.contentWindow.postMessage({ type: 'INIT_ENGINE' }, '*');
+};
+
 let currentMode = 'FALLBACK';
 
 window.addEventListener('message', (e) => {
@@ -81,7 +86,7 @@ window.addEventListener('message', (e) => {
     statusDiv.textContent = payload.status;
     orb.pulse(0.1);
   } else if (type === 'READY') {
-    currentMode = 'LIVE';
+    currentMode = payload.mode;
     statusDiv.textContent = `LIVE: ${payload.model} ready. Press Ctrl+K.`;
     orb.setIdle();
   } else if (type === 'STATUS') {
@@ -130,13 +135,16 @@ cmdInput.addEventListener('keydown', (e) => {
 
 function renderCortex(flow, metrics) {
   if (!cortexDiv) return;
-  const modeLabel = metrics.mode === 'LIVE' 
-    ? '<span style="color:#4ade80">[LIVE]</span>' 
-    : '<span style="color:#fbbf24">[RULE-BASED FALLBACK]</span>';
+  let modeLabel = '<span style="color:#fbbf24">[RULE-BASED FALLBACK]</span>';
+  let metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Metrics: Simulated (Fallback Mode)</div>`;
   
-  const metricsHtml = metrics.mode === 'LIVE' 
-    ? `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s</div>`
-    : `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Metrics: Simulated (Fallback Mode)</div>`;
+  if (metrics.mode === 'LIVE') {
+    modeLabel = '<span style="color:#4ade80">[LIVE WebGPU]</span>';
+    metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s</div>`;
+  } else if (metrics.mode === 'LIVE_WASM') {
+    modeLabel = '<span style="color:#60a5fa">[LIVE WASM]</span>';
+    metricsHtml = `<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.5rem;">Tokens: ~${metrics.tokens} | Time: ${metrics.duration}s | Speed: ~${metrics.tokensPerSec} tok/s (Estimated)</div>`;
+  }
 
   cortexDiv.innerHTML = `${modeLabel}${metricsHtml}<pre style="text-align:left; font-size:0.8rem; color:var(--fg); margin:0;">${JSON.stringify(flow, null, 2)}</pre>`;
   cortexDiv.style.display = 'block';
