@@ -593,23 +593,28 @@ cmdPaletteInput.addEventListener('keydown', (e) => {
 });
 
 function exportRunRecord() {
-  if (!runResults) {
+  const record = window.runResults || runResults;
+  const flow = window.currentFlow || currentFlow;
+  const mode = window.currentMode || currentMode;
+  if (!record) {
     statusDiv.textContent = 'No run record to export.';
     return;
   }
-  const record = {
+  const data = {
     version: '1.0.0',
     timestamp: new Date().toISOString(),
-    mode: currentMode,
-    flow: currentFlow,
-    results: runResults
+    mode: mode,
+    flow: flow,
+    results: record
   };
-  const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `orange-run-record-${Date.now()}.json`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
   statusDiv.textContent = 'Run Record exported.';
 }
