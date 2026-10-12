@@ -36,8 +36,15 @@ const resultsContent = document.getElementById('results-content');
 const resultsClose = document.getElementById('results-close');
 const inspectorDrawer = document.getElementById('inspector-drawer');
 
+// V4: Command Palette & Token Tape
+const cmdPaletteOverlay = document.getElementById('cmd-palette-overlay');
+const cmdPaletteInput = document.getElementById('cmd-palette-input');
+const cmdPaletteList = document.getElementById('cmd-palette-list');
+const tokenTape = document.getElementById('token-tape');
+
 let isRunning = false;
 let runResults = null;
+let isCmdPaletteOpen = false;
 
 const NODE_GLYPHS = {
   trigger: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
@@ -58,8 +65,9 @@ class LivingOrb {
     this.gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
     this.time = 0; 
     this.energy = 0; 
+    this.progress = 0;
+    this.state = 0; // 0=idle, 1=loading, 2=generating, 3=error
     this.showEasterEgg = false; 
-    this.state = 'idle';
     this.animationId = null;
     if (!this.gl) { 
       console.warn('WebGL not supported'); 
@@ -72,14 +80,36 @@ class LivingOrb {
   }
   initShaders() {
     const vs = `attribute vec4 position; void main() { gl_Position = position; }`;
-    const fs = `precision highp float; uniform float u_time; uniform float u_energy; uniform bool u_easterEgg;
+    const fs = `precision highp float; 
+      uniform float u_time; 
+      uniform float u_energy; 
+      uniform float u_progress;
+      uniform int u_state;
+      uniform bool u_easterEgg;
       void main() {
-        vec2 uv = gl_FragCoord.xy / vec2(40.0, 40.0); vec2 center = uv - 0.5; float dist = length(center);
-        float pulse = sin(u_time * 3.0 + u_energy * 10.0) * 0.1 + 0.9;
-        float orb = smoothstep(0.4 * pulse, 0.35 * pulse, dist);
-        vec3 glow = vec3(1.0, 0.5, 0.0) * orb * (1.0 - dist * 2.0);
+        vec2 uv = gl_FragCoord.xy / vec2(40.0, 40.0); 
+        vec2 center = uv - 0.5; 
+        float dist = length(center);
+        float angle = atan(center.y, center.x);
+        float normalizedAngle = (angle + 3.14159) / (2.0 * 3.14159);
+        float ring = 0.0;
+        
+        if (u_state == 0) { // idle
+          ring = smoothstep(0.45, 0.4, dist) - smoothstep(0.4, 0.35, dist);
+        } else if (u_state == 1) { // loading
+          float arc = step(normalizedAngle, u_progress);
+          ring = (smoothstep(0.45, 0.4, dist) - smoothstep(0.4, 0.35, dist)) * arc;
+        } else if (u_state == 2) { // generating
+          float pulse = sin(u_time * (3.0 + u_energy * 10.0)) * 0.1 + 0.9;
+          ring = smoothstep(0.45 * pulse, 0.4 * pulse, dist) - smoothstep(0.4 * pulse, 0.35 * pulse, dist);
+        } else if (u_state == 3) { // error
+          float gap = step(0.4, abs(normalizedAngle - 0.75));
+          ring = (smoothstep(0.45, 0.4, dist) - smoothstep(0.4, 0.35, dist)) * gap;
+        }
+        
+        vec3 glow = vec3(1.0, 0.5, 0.0) * ring;
         if (u_easterEgg) glow = mix(glow, vec3(1.0, 0.6, 0.1), smoothstep(0.05, 0.0, abs(dist - 0.3)));
-        gl_FragColor = vec4(glow, orb);
+        gl_FragColor = vec4(glow, ring);
       }`;
     const vShader = this.compileShader(this.gl.VERTEX_SHADER, vs);
     const fShader = this.compileShader(this.gl.FRAGMENT_SHADER, fs);
@@ -90,6 +120,8 @@ class LivingOrb {
     this.posLoc = this.gl.getAttribLocation(this.program, 'position');
     this.timeLoc = this.gl.getUniformLocation(this.program, 'u_time');
     this.energyLoc = this.gl.getUniformLocation(this.program, 'u_energy');
+    this.progressLoc = this.gl.getUniformLocation(this.program, 'u_progress');
+    this.stateLoc = this.gl.getUniformLocation(this.program, 'u_state');
     this.eeLoc = this.gl.getUniformLocation(this.program, 'u_easterEgg');
     const buf = this.gl.createBuffer(); 
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buf);
@@ -106,13 +138,19 @@ class LivingOrb {
     this.canvas.height = 40; 
     this.gl.viewport(0, 0, 40, 40); 
   }
+  setState(state, value = 0) {
+    this.state = state;
+    this.progress = value;
+    this.startAnimation();
+  }
   pulse(amt = 0.3) { 
     this.energy = Math.min(this.energy + amt, 1.0); 
-    this.state = 'generating';
+    this.state = 2; // generating
   }
   setIdle() { 
-    this.state = 'idle'; 
+    this.state = 0; 
     this.energy = 0;
+    this.progress = 0;
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
@@ -124,13 +162,15 @@ class LivingOrb {
   }
   animate() {
     if (!this.gl) return; 
-    if (this.state === 'idle') this.energy *= 0.95;
+    if (this.state === 0) this.energy *= 0.95;
     this.time += 0.016;
     this.gl.clearColor(0,0,0,0); 
     this.gl.clear(this.gl.COLOR_BUFFER_BIT);
     this.gl.useProgram(this.program);
     this.gl.uniform1f(this.timeLoc, this.time); 
     this.gl.uniform1f(this.energyLoc, this.energy);
+    this.gl.uniform1f(this.progressLoc, this.progress);
+    this.gl.uniform1i(this.stateLoc, this.state);
     this.gl.uniform1i(this.eeLoc, this.showEasterEgg ? 1 : 0);
     this.gl.enableVertexAttribArray(this.posLoc);
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.gl.getParameter(this.gl.ARRAY_BUFFER_BINDING));
@@ -169,11 +209,13 @@ window.addEventListener('message', (e) => {
   if (type === 'PROGRESS') {
     if (!loadingScreen.classList.contains('hidden')) {
       loadingProgress.textContent = payload.status;
+      // Extract progress percentage if available
+      const match = payload.status.match(/(\d+)%/);
+      if (match) orb.setState(1, parseInt(match[1]) / 100);
     } else {
       statusDiv.textContent = payload.status;
     }
     orb.pulse(0.1);
-    orb.startAnimation();
   } else if (type === 'READY') {
     currentMode = payload.mode;
     modeChip.textContent = payload.mode === 'LIVE_WEBGPU' ? 'LIVE WebGPU' : 'LIVE WASM';
@@ -186,7 +228,6 @@ window.addEventListener('message', (e) => {
   } else if (type === 'STATUS') {
     statusDiv.textContent = payload;
     orb.pulse(0.8);
-    orb.startAnimation();
   } else if (type === 'SUCCESS') {
     currentFlow = payload.flow;
     updateRailMetrics(payload.metrics, 'success');
@@ -202,7 +243,7 @@ window.addEventListener('message', (e) => {
     railVal.textContent = `Retry ${payload.attempt}/2: ${payload.originalError}`;
     railVal.classList.remove('empty');
     showValidationFail(payload.originalError, payload.attempt);
-    orb.pulse(0.8);
+    orb.setState(3); // error state
   } else if (type === 'FALLBACK' || type === 'ERROR') {
     currentMode = 'FALLBACK';
     modeChip.textContent = 'FALLBACK';
@@ -212,7 +253,7 @@ window.addEventListener('message', (e) => {
     updateRailMetrics({ mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' }, 'fallback');
     renderFlow(currentFlow);
     showValidationFail('rule-based fallback', 0);
-    orb.setIdle();
+    orb.setState(3); // error state
     cmdInput.value = '';
     updateShareURL();
     loadingScreen.classList.add('hidden');
@@ -364,7 +405,6 @@ async function executeFlow() {
   railRun.textContent = 'executing...';
   railRun.classList.remove('empty');
 
-  // Show running state on nodes
   const nodes = stageContent.querySelectorAll('.node');
   const latencyTimers = [];
   nodes.forEach((nodeEl, i) => {
@@ -375,7 +415,6 @@ async function executeFlow() {
     latencyTimers.push({ el: timer, start: performance.now() });
   });
 
-  // Update timers every 50ms
   const timerInterval = setInterval(() => {
     latencyTimers.forEach(({ el, start }) => {
       el.textContent = `${Math.round(performance.now() - start)}ms`;
@@ -386,7 +425,6 @@ async function executeFlow() {
     runResults = await runFlow(currentFlow);
     clearInterval(timerInterval);
     
-    // Update nodes with final latency
     latencyTimers.forEach(({ el }, i) => {
       if (runResults.nodes[i]) {
         el.textContent = `${runResults.nodes[i].latency}ms`;
@@ -394,15 +432,12 @@ async function executeFlow() {
       }
     });
 
-    // Show results tray
     renderResults(runResults);
     resultsTray.classList.add('results-tray--visible');
     
-    // Update rail
     railRun.textContent = `${runResults.totalLatency}ms total`;
     railRun.classList.remove('empty');
 
-    // Animate edge dots
     animateEdgeDots();
   } catch (err) {
     clearInterval(timerInterval);
@@ -469,11 +504,7 @@ function animateEdgeDots() {
     dot.setAttribute('cx', '0');
     dot.setAttribute('cy', '1');
     edge.appendChild(dot);
-    
-    // Remove dot after animation
-    setTimeout(() => {
-      dot.remove();
-    }, 1000);
+    setTimeout(() => { dot.remove(); }, 1000);
   });
 }
 
@@ -486,7 +517,6 @@ stageContent.addEventListener('click', (e) => {
   const nodeResult = runResults.nodes.find(n => n.id === nodeId);
   if (!nodeResult) return;
 
-  // Populate Inspector
   document.getElementById('inspector-node-id').textContent = nodeResult.id;
   document.getElementById('inspector-node-type').textContent = nodeResult.type;
   document.getElementById('inspector-prompt-phrase').textContent = 'N/A (not tracked yet)';
@@ -498,12 +528,116 @@ stageContent.addEventListener('click', (e) => {
   inspectorDrawer.classList.add('inspector-drawer--visible');
 });
 
-// Close Inspector when clicking outside
 document.addEventListener('click', (e) => {
   if (!inspectorDrawer.contains(e.target) && !e.target.closest('.node')) {
     inspectorDrawer.classList.remove('inspector-drawer--visible');
   }
 });
+
+// === V4: Command Palette & Token Tape ===
+const cmdActions = [
+  { label: 'Compile current prompt', shortcut: 'Enter', action: () => { closeCmdPalette(); compile(); } },
+  { label: 'Run current flow', shortcut: '', action: () => { closeCmdPalette(); executeFlow(); } },
+  { label: 'Load: Fetch weather', shortcut: '', action: () => { closeCmdPalette(); cmdInput.value = 'Fetch current weather'; compile(); } },
+  { label: 'Load: HN top stories', shortcut: '', action: () => { closeCmdPalette(); cmdInput.value = 'Get top Hacker News stories'; compile(); } },
+  { label: 'Load: EUR/USD rate', shortcut: '', action: () => { closeCmdPalette(); cmdInput.value = 'Get EUR to USD exchange rate'; compile(); } },
+  { label: 'Export Run Record', shortcut: '', action: () => { closeCmdPalette(); exportRunRecord(); } },
+  { label: 'Open About', shortcut: '', action: () => { closeCmdPalette(); openAbout(); } }
+];
+
+function openCmdPalette() {
+  isCmdPaletteOpen = true;
+  cmdPaletteOverlay.classList.add('cmd-palette-overlay--visible');
+  cmdPaletteInput.value = '';
+  cmdPaletteInput.focus();
+  renderCmdPaletteList('');
+}
+
+function closeCmdPalette() {
+  isCmdPaletteOpen = false;
+  cmdPaletteOverlay.classList.remove('cmd-palette-overlay--visible');
+}
+
+function renderCmdPaletteList(filter) {
+  cmdPaletteList.innerHTML = '';
+  const filtered = cmdActions.filter(a => a.label.toLowerCase().includes(filter.toLowerCase()));
+  filtered.forEach((action, index) => {
+    const li = document.createElement('li');
+    li.className = 'cmd-palette-item' + (index === 0 ? ' cmd-palette-item--active' : '');
+    li.setAttribute('role', 'option');
+    li.innerHTML = `<span>${action.label}</span>${action.shortcut ? `<span class="cmd-palette-shortcut">${action.shortcut}</span>` : ''}`;
+    li.addEventListener('click', action.action);
+    cmdPaletteList.appendChild(li);
+  });
+}
+
+cmdPaletteInput.addEventListener('input', (e) => {
+  renderCmdPaletteList(e.target.value);
+});
+
+cmdPaletteInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeCmdPalette();
+  } else if (e.key === 'Enter') {
+    const active = cmdPaletteList.querySelector('.cmd-palette-item--active');
+    if (active) active.click();
+  } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const items = Array.from(cmdPaletteList.querySelectorAll('.cmd-palette-item'));
+    const current = items.findIndex(i => i.classList.contains('cmd-palette-item--active'));
+    let next = current;
+    if (e.key === 'ArrowDown') next = (current + 1) % items.length;
+    else next = (current - 1 + items.length) % items.length;
+    items.forEach(i => i.classList.remove('cmd-palette-item--active'));
+    items[next].classList.add('cmd-palette-item--active');
+  }
+});
+
+function exportRunRecord() {
+  if (!runResults) {
+    statusDiv.textContent = 'No run record to export.';
+    return;
+  }
+  const record = {
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    mode: currentMode,
+    flow: currentFlow,
+    results: runResults
+  };
+  const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `orange-run-record-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  statusDiv.textContent = 'Run Record exported.';
+}
+
+// Token Tape simulation (since engine returns full text, we animate it)
+let tapeInterval;
+function startTokenTape(text) {
+  tokenTape.classList.add('token-tape--visible');
+  tokenTape.innerHTML = '<span class="token-tape-cursor"></span>';
+  let i = 0;
+  tapeInterval = setInterval(() => {
+    if (i < text.length) {
+      tokenTape.innerHTML = text.substring(0, i + 1) + '<span class="token-tape-cursor"></span>';
+      tokenTape.scrollTop = tokenTape.scrollHeight;
+      i++;
+    } else {
+      clearInterval(tapeInterval);
+      tokenTape.innerHTML = text; // remove cursor at end
+    }
+  }, 10); // Simulate ~100 tok/s
+}
+
+function stopTokenTape() {
+  clearInterval(tapeInterval);
+  tokenTape.classList.remove('token-tape--visible');
+  tokenTape.innerHTML = '';
+}
 
 function compile() {
   const prompt = cmdInput.value.trim();
@@ -512,20 +646,32 @@ function compile() {
     cmdInput.focus();
     return;
   }
-  orb.pulse(0.5);
-  orb.startAnimation();
+  orb.setState(2); // generating
   railGen.textContent = 'compiling...';
   railGen.classList.remove('empty');
+  
+  // Simulate token tape during compilation (mocked since we don't have streaming yet)
+  startTokenTape('{"nodes": [{"id": "node_0", "type": "trigger"... compiling...}');
+  
   engineFrame.contentWindow.postMessage({ type: 'COMPILE', payload: prompt }, '*');
 }
 
 compileBtn.addEventListener('click', compile);
-cmdBtn.addEventListener('click', () => { cmdInput.focus(); orb.pulse(0.5); });
+cmdBtn.addEventListener('click', openCmdPalette);
 cmdInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') compile(); });
 
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); cmdInput.focus(); orb.pulse(0.5); }
-  if (e.key === 'Escape') { cmdInput.blur(); hideEasterEgg(); closeAbout(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { 
+    e.preventDefault(); 
+    if (isCmdPaletteOpen) closeCmdPalette();
+    else openCmdPalette();
+  }
+  if (e.key === 'Escape') { 
+    cmdInput.blur(); 
+    closeCmdPalette();
+    hideEasterEgg(); 
+    closeAbout(); 
+  }
 });
 
 libraryChips.forEach(chip => {
