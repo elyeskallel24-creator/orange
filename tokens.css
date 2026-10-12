@@ -41,7 +41,51 @@
   
   /* Focus Ring */
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  
+  /* Layout - NEW for V1 */
+  --stage-bg: oklch(0.10 0.005 60);
+  --rail-width: 320px;
+  --rail-collapsed-width: 48px;
+  --cmd-line-max-width: 720px;
+  --lens-size: 40px;
+  --node-width: 220px;
+  --node-height: 120px;
 }
+
+/* Font Faces - CORRECTED PATHS */
+@font-face {
+  font-family: 'Geist';
+  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/Geist/Geist-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist';
+  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/Geist/Geist-Italic-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/JetBrains_Mono/JetBrainsMono-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/Geist,Instrument_Serif,JetBrains_Mono/JetBrains_Mono/JetBrainsMono-Italic-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Add Instrument Serif @font-face once you confirm the exact path */
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
