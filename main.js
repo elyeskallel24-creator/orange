@@ -1,5 +1,6 @@
 // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
 import { compileToFlow, validateFlow, repairFlow } from './compiler.js';
+import { DEMO_FLOWS } from './library.js';
 
 console.log('%cORANGE', 'color: orange; font-size: 2rem; font-weight: bold;');
 console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #ccc;');
@@ -7,6 +8,8 @@ console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #
 const statusDiv = document.getElementById('status');
 const cortexDiv = document.getElementById('cortex');
 const cmdInput = document.getElementById('cmd-input');
+const libraryContainer = document.getElementById('library-container');
+const shareBtn = document.getElementById('share-btn');
 
 // Initialize Orb
 class LivingOrb {
@@ -81,6 +84,7 @@ engineFrame.onload = sendInit;
 setTimeout(sendInit, 500);
 
 let currentMode = 'FALLBACK';
+let currentFlow = null;
 
 window.addEventListener('message', (e) => {
   if (e.source !== engineFrame.contentWindow) return;
@@ -97,10 +101,12 @@ window.addEventListener('message', (e) => {
     statusDiv.textContent = payload;
     orb.pulse(0.8);
   } else if (type === 'SUCCESS') {
+    currentFlow = payload.flow;
     renderCortex(payload.flow, payload.metrics);
     statusDiv.textContent = `Compiled successfully (${payload.metrics.tokensPerSec} tok/s).`;
     orb.setIdle();
     cmdInput.value = '';
+    updateShareURL();
   } else if (type === 'RETRY') {
     statusDiv.textContent = payload.message;
     orb.pulse(0.8);
@@ -113,10 +119,11 @@ window.addEventListener('message', (e) => {
   } else if (type === 'FALLBACK' || type === 'ERROR') {
     currentMode = 'FALLBACK';
     statusDiv.textContent = type === 'FALLBACK' ? payload.message : 'Using RULE-BASED FALLBACK.';
-    const flow = compileToFlow(cmdInput.value || 'default fallback flow');
-    renderCortex(flow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
+    currentFlow = compileToFlow(cmdInput.value || 'default fallback flow');
+    renderCortex(currentFlow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
     orb.setIdle();
     cmdInput.value = '';
+    updateShareURL();
   }
 });
 
@@ -125,13 +132,11 @@ cmdInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && cmdInput.value.trim() !== '') {
     e.preventDefault();
     orb.pulse(0.5);
-    // Clear previous cortex state on new compile
     if (cortexDiv) cortexDiv.innerHTML = '';
     engineFrame.contentWindow.postMessage({ type: 'COMPILE', payload: cmdInput.value }, '*');
   }
 });
 
-// Ctrl+K focuses the inline input
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') { 
     e.preventDefault(); 
@@ -146,6 +151,9 @@ document.addEventListener('keydown', (e) => {
 
 function renderCortex(flow, metrics) {
   if (!cortexDiv) return;
+  libraryContainer.style.display = 'none';
+  cortexDiv.style.display = 'block';
+  
   let modeLabel = '<span style="color:var(--warning)">[RULE-BASED FALLBACK]</span>';
   let metricsHtml = `<div style="color:var(--fg-muted); margin-bottom:0.5rem;">Metrics: n/a (no model in this mode)</div>`;
   
@@ -161,6 +169,73 @@ function renderCortex(flow, metrics) {
 
   cortexDiv.innerHTML = `${modeLabel}${metricsHtml}<pre style="color:var(--fg-primary);">${JSON.stringify(flow, null, 2)}</pre>`;
 }
+
+// Library & Share Logic
+function renderLibrary() {
+  cortexDiv.style.display = 'none';
+  libraryContainer.style.display = 'flex';
+  libraryContainer.innerHTML = '';
+  DEMO_FLOWS.forEach(demo => {
+    const item = document.createElement('div');
+    item.className = 'library-item';
+    item.innerHTML = `<h4>${demo.title}</h4><p>${demo.description}</p>`;
+    item.addEventListener('click', () => {
+      currentFlow = demo.flow;
+      renderCortex(currentFlow, { mode: 'REPLAY', tokens: '-', duration: '-', tokensPerSec: '-' });
+      statusDiv.textContent = `Loaded: ${demo.title}`;
+      updateShareURL();
+    });
+    libraryContainer.appendChild(item);
+  });
+}
+
+function updateShareURL() {
+  if (!currentFlow) return;
+  try {
+    const jsonStr = JSON.stringify(currentFlow);
+    const encoded = btoa(encodeURIComponent(jsonStr));
+    const newUrl = `${window.location.origin}${window.location.pathname}#flow=${encoded}`;
+    window.history.replaceState({}, '', newUrl);
+  } catch (e) {
+    console.warn('Failed to encode flow for share URL', e);
+  }
+}
+
+shareBtn.addEventListener('click', () => {
+  if (!currentFlow) {
+    statusDiv.textContent = 'No flow to share yet.';
+    return;
+  }
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const originalText = shareBtn.textContent;
+    shareBtn.textContent = 'Copied!';
+    setTimeout(() => { shareBtn.textContent = originalText; }, 2000);
+  });
+});
+
+// Load flow from URL hash on startup
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.location.hash.startsWith('#flow=')) {
+    try {
+      const encoded = window.location.hash.slice(6);
+      const jsonStr = decodeURIComponent(atob(encoded));
+      currentFlow = JSON.parse(jsonStr);
+      renderCortex(currentFlow, { mode: 'REPLAY', tokens: '-', duration: '-', tokensPerSec: '-' });
+      statusDiv.textContent = 'Loaded shared Flow.';
+    } catch (e) {
+      console.error('Invalid shared flow in URL', e);
+    }
+  } else {
+    renderLibrary();
+  }
+
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.warn('SW registration failed', err);
+    });
+  }
+});
 
 // Easter Egg Logic
 const eeOverlay = document.getElementById('easter-egg-overlay');
