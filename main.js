@@ -524,27 +524,32 @@ stageContent.addEventListener('click', (e) => {
     n.classList.remove('node--selected');
   });
   
-  // If no run results yet, just highlight the node
-  if (!runResults) {
-    nodeEl.classList.add('node--selected');
-    return;
-  }
-  
-  const nodeId = nodeEl.dataset.nodeId;
-  const nodeResult = runResults.nodes.find(n => n.id === nodeId);
-  if (!nodeResult) return;
-
-  // Add selected class
+  // Add selected class to clicked node
   nodeEl.classList.add('node--selected');
+  
+  // If no run results yet, show placeholder values
+  if (!runResults) {
+    document.getElementById('inspector-node-id').textContent = nodeEl.dataset.nodeId || 'not available';
+    document.getElementById('inspector-node-type').textContent = 'not available';
+    document.getElementById('inspector-prompt-phrase').textContent = 'not available';
+    document.getElementById('inspector-validator-status').textContent = 'not tested';
+    document.getElementById('inspector-source-url').textContent = 'not available';
+    document.getElementById('inspector-timestamp').textContent = 'not measured';
+    document.getElementById('inspector-latency').textContent = 'not measured';
+  } else {
+    const nodeId = nodeEl.dataset.nodeId;
+    const nodeResult = runResults.nodes.find(n => n.id === nodeId);
+    if (!nodeResult) return;
 
-  // Populate Inspector with actual values or fallbacks
-  document.getElementById('inspector-node-id').textContent = nodeResult.id || 'not available';
-  document.getElementById('inspector-node-type').textContent = nodeResult.type || 'not available';
-  document.getElementById('inspector-prompt-phrase').textContent = 'N/A (not tracked yet)';
-  document.getElementById('inspector-validator-status').textContent = 'schema-valid ✓';
-  document.getElementById('inspector-source-url').textContent = nodeResult.data?.url || 'not available';
-  document.getElementById('inspector-timestamp').textContent = new Date().toISOString();
-  document.getElementById('inspector-latency').textContent = `${nodeResult.latency}ms`;
+    // Populate Inspector with actual values
+    document.getElementById('inspector-node-id').textContent = nodeResult.id || 'not available';
+    document.getElementById('inspector-node-type').textContent = nodeResult.type || 'not available';
+    document.getElementById('inspector-prompt-phrase').textContent = 'N/A (not tracked yet)';
+    document.getElementById('inspector-validator-status').textContent = 'schema-valid ✓';
+    document.getElementById('inspector-source-url').textContent = nodeResult.data?.url || 'not available';
+    document.getElementById('inspector-timestamp').textContent = new Date().toISOString();
+    document.getElementById('inspector-latency').textContent = `${nodeResult.latency}ms`;
+  }
 
   // Show inspector
   inspectorDrawer.hidden = false;
