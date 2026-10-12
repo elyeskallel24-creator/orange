@@ -4,7 +4,8 @@
   <script type="importmap">
     {
       "imports": {
-        "web-llm": "https://esm.sh/@mlc-ai/web-llm@0.2.73"
+        "web-llm": "https://esm.sh/@mlc-ai/web-llm@0.2.73",
+        "@huggingface/transformers": "https://esm.sh/@huggingface/transformers@3.0.0"
       }
     }
   </script>
@@ -13,6 +14,7 @@
 <script type="module">
   // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
   import { CreateMLCEngine } from 'web-llm';
+  import { pipeline } from '@huggingface/transformers';
 
   const FLOW_SCHEMA = {
     type: "object",
@@ -42,56 +44,90 @@
   };
 
   let engine = null;
-  let modelId = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
+  let wasmPipeline = null;
+  let currentMode = 'FALLBACK'; 
 
   window.addEventListener('message', async (e) => {
     const { type, payload } = e.data;
 
     if (type === 'INIT_ENGINE') {
       try {
+        if (!navigator.gpu) throw new Error('WebGPU not supported by browser');
+        
         window.parent.postMessage({ type: 'PROGRESS', payload: { status: 'Loading WebGPU engine...', progress: 0 } });
-        engine = await CreateMLCEngine(modelId, {
+        engine = await CreateMLCEngine('Qwen2.5-0.5B-Instruct-q4f16_1-MLC', {
           initProgressCallback: (report) => {
             window.parent.postMessage({ 
               type: 'PROGRESS', 
-              payload: { status: `Loading model: ${Math.round(report.progress * 100)}%`, progress: report.progress } 
+              payload: { status: `Loading WebGPU model: ${Math.round(report.progress * 100)}%`, progress: report.progress } 
             });
           }
         });
-        window.parent.postMessage({ type: 'READY', payload: { model: modelId } });
+        currentMode = 'LIVE_WEBGPU';
+        window.parent.postMessage({ type: 'READY', payload: { model: 'Qwen2.5-0.5B (WebGPU)', mode: 'LIVE' } });
       } catch (err) {
-        console.error('[ENGINE ERROR]', err);
-        window.parent.postMessage({ type: 'ERROR', payload: { message: err.message } });
+        console.warn('[ENGINE] WebGPU failed, falling back to WASM:', err);
+        try {
+          window.parent.postMessage({ type: 'PROGRESS', payload: { status: 'Loading WASM engine (CPU)...', progress: 0 } });
+          wasmPipeline = await pipeline('text-generation', 'Xenova/Qwen2.5-0.5B-Instruct', {
+            progress_callback: (report) => {
+              if (report.status === 'progress') {
+                window.parent.postMessage({ 
+                  type: 'PROGRESS', 
+                  payload: { status: `Loading WASM model: ${Math.round(report.progress * 100)}%`, progress: report.progress } 
+                });
+              }
+            }
+          });
+          currentMode = 'LIVE_WASM';
+          window.parent.postMessage({ type: 'READY', payload: { model: 'Qwen2.5-0.5B (WASM)', mode: 'LIVE_WASM' } });
+        } catch (wasmErr) {
+          console.error('[ENGINE] WASM fallback failed:', wasmErr);
+          window.parent.postMessage({ type: 'ERROR', payload: { message: 'All on-device models failed to load.' } });
+        }
       }
     }
 
     if (type === 'COMPILE') {
-      if (!engine) {
+      if (!engine && !wasmPipeline) {
         window.parent.postMessage({ type: 'FALLBACK', payload: { message: 'Engine not ready.' } });
         return;
       }
       
       window.parent.postMessage({ type: 'STATUS', payload: 'Compiling with on-device LLM...' });
       
-      try {
-        const prompt = `You are a workflow compiler. Convert this user request into a JSON workflow. 
-        Strictly follow this JSON schema: ${JSON.stringify(FLOW_SCHEMA)}. 
-        Output ONLY valid JSON, no markdown, no explanations.
-        User request: "${payload}"`;
+      const prompt = `You are a workflow compiler. Convert this user request into a JSON workflow. 
+      Strictly follow this JSON schema: ${JSON.stringify(FLOW_SCHEMA)}. 
+      Output ONLY valid JSON, no markdown, no explanations.
+      User request: "${payload}"`;
 
+      try {
         const startTime = performance.now();
-        const reply = await engine.chat.completions.create({
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.1,
-        });
+        let replyText = '';
+        let tokens = 0;
+
+        if (engine) {
+          const reply = await engine.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1,
+          });
+          replyText = reply.choices[0].message.content;
+          tokens = reply.usage?.total_tokens || 0;
+        } else if (wasmPipeline) {
+          const output = await wasmPipeline(prompt, { max_new_tokens: 500, temperature: 0.1, do_sample: true });
+          const fullText = output[0].generated_text;
+          const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+          replyText = jsonMatch ? jsonMatch[0] : fullText;
+          tokens = Math.ceil(replyText.length / 4); // Rough estimate for WASM
+        }
+
         const endTime = performance.now();
-        const tokens = reply.usage?.total_tokens || 0;
         const duration = (endTime - startTime) / 1000;
         const tokensPerSec = tokens > 0 ? (tokens / duration).toFixed(1) : '-';
 
         let flow;
         try {
-          const jsonStr = reply.choices[0].message.content.replace(/```json\n?|\n?```/g, '').trim();
+          const jsonStr = replyText.replace(/```json\n?|\n?```/g, '').trim();
           flow = JSON.parse(jsonStr);
           
           if (!flow.nodes || !Array.isArray(flow.nodes) || flow.nodes.length === 0) {
@@ -102,7 +138,7 @@
             type: 'SUCCESS', 
             payload: { 
               flow, 
-              metrics: { tokens, duration: duration.toFixed(2), tokensPerSec, mode: 'LIVE' } 
+              metrics: { tokens, duration: duration.toFixed(2), tokensPerSec, mode: currentMode } 
             } 
           });
         } catch (parseErr) {
