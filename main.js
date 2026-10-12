@@ -1,5 +1,5 @@
 // EASTER EGG: One of the heavy reasons in creating orange was to pay homage to gg33 & Garry Grinberg, thank you Garry for everything.
-import { compileToFlow, validateFlow, repairFlow } from './compiler.js';
+import { compileToFlow } from './compiler.js';
 import { DEMO_FLOWS } from './library.js';
 
 console.log('%cORANGE', 'color: orange; font-size: 2rem; font-weight: bold;');
@@ -8,7 +8,6 @@ console.log('%cmade with love by Elyes Kallel with the spirit of BXB', 'color: #
 const loadingScreen = document.getElementById('loading-screen');
 const loadingProgress = document.getElementById('loading-progress');
 const statusDiv = document.getElementById('status');
-const cortexDiv = document.getElementById('cortex');
 const cmdInput = document.getElementById('cmd-input');
 const compileBtn = document.getElementById('compile-btn');
 const cmdBtn = document.getElementById('cmd-btn');
@@ -16,10 +15,16 @@ const aboutBtn = document.getElementById('about-btn');
 const aboutPanel = document.getElementById('about-panel');
 const aboutCloseBtn = document.getElementById('about-close-btn');
 const modeChip = document.getElementById('mode-chip');
-const emptyState = document.getElementById('empty-state');
-const libraryPrompts = document.querySelectorAll('.library-prompt');
+const exampleFlow = document.getElementById('example-flow');
+const libraryChips = document.querySelectorAll('.chip');
 
-// Initialize Orb (render on-demand only)
+// Rail readouts
+const railModel = document.getElementById('rail-model');
+const railGen = document.getElementById('rail-gen');
+const railVal = document.getElementById('rail-val');
+const railRun = document.getElementById('rail-run');
+
+// Initialize Lens Orb (40px, render on-demand)
 class LivingOrb {
   constructor(canvas) {
     this.canvas = canvas;
@@ -36,16 +41,15 @@ class LivingOrb {
     this.initShaders(); 
     this.resize();
     window.addEventListener('resize', () => this.resize());
-    // Start animation only when needed
     this.startAnimation();
   }
   initShaders() {
     const vs = `attribute vec4 position; void main() { gl_Position = position; }`;
     const fs = `precision highp float; uniform float u_time; uniform float u_energy; uniform bool u_easterEgg;
       void main() {
-        vec2 uv = gl_FragCoord.xy / vec2(800.0, 800.0); vec2 center = uv - 0.5; float dist = length(center);
+        vec2 uv = gl_FragCoord.xy / vec2(40.0, 40.0); vec2 center = uv - 0.5; float dist = length(center);
         float pulse = sin(u_time * 3.0 + u_energy * 10.0) * 0.1 + 0.9;
-        float orb = smoothstep(0.3 * pulse, 0.25 * pulse, dist);
+        float orb = smoothstep(0.4 * pulse, 0.35 * pulse, dist);
         vec3 glow = vec3(1.0, 0.5, 0.0) * orb * (1.0 - dist * 2.0);
         if (u_easterEgg) glow = mix(glow, vec3(1.0, 0.6, 0.1), smoothstep(0.05, 0.0, abs(dist - 0.3)));
         gl_FragColor = vec4(glow, orb);
@@ -71,10 +75,9 @@ class LivingOrb {
     return s; 
   }
   resize() { 
-    const s = Math.min(window.innerWidth, window.innerHeight, 800); 
-    this.canvas.width = s; 
-    this.canvas.height = s; 
-    this.gl.viewport(0, 0, s, s); 
+    this.canvas.width = 40; 
+    this.canvas.height = 40; 
+    this.gl.viewport(0, 0, 40, 40); 
   }
   pulse(amt = 0.3) { 
     this.energy = Math.min(this.energy + amt, 1.0); 
@@ -83,21 +86,18 @@ class LivingOrb {
   setIdle() { 
     this.state = 'idle'; 
     this.energy = 0;
-    // Stop animation when idle (render on-demand)
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
   }
   startAnimation() {
-    if (this.animationId) return; // Already running
+    if (this.animationId) return;
     this.animate();
   }
   animate() {
     if (!this.gl) return; 
-    if (this.state === 'idle') {
-      this.energy *= 0.95;
-    }
+    if (this.state === 'idle') this.energy *= 0.95;
     this.time += 0.016;
     this.gl.clearColor(0,0,0,0); 
     this.gl.clear(this.gl.COLOR_BUFFER_BIT);
@@ -111,18 +111,12 @@ class LivingOrb {
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
     this.animationId = requestAnimationFrame(() => this.animate());
   }
-  triggerEasterEgg() { 
-    this.showEasterEgg = true;
-    this.startAnimation();
-  }
-  hideEasterEgg() { 
-    this.showEasterEgg = false;
-    this.setIdle();
-  }
+  triggerEasterEgg() { this.showEasterEgg = true; this.startAnimation(); }
+  hideEasterEgg() { this.showEasterEgg = false; this.setIdle(); }
 }
 
-const canvas = document.getElementById('orb');
-const orb = new LivingOrb(canvas);
+const lensCanvas = document.getElementById('lens-canvas');
+const orb = new LivingOrb(lensCanvas);
 
 // Isolated Engine Frame
 const engineFrame = document.createElement('iframe');
@@ -146,7 +140,6 @@ window.addEventListener('message', (e) => {
   const { type, payload } = e.data;
   
   if (type === 'PROGRESS') {
-    // Update loading screen if visible
     if (!loadingScreen.classList.contains('hidden')) {
       loadingProgress.textContent = payload.status;
     } else {
@@ -158,11 +151,10 @@ window.addEventListener('message', (e) => {
     currentMode = payload.mode;
     modeChip.textContent = payload.mode === 'LIVE_WEBGPU' ? 'LIVE WebGPU' : 'LIVE WASM';
     modeChip.setAttribute('data-mode', payload.mode);
-    statusDiv.textContent = `${payload.model} ready.`;
-    // Hide loading screen
+    railModel.textContent = payload.model;
+    railModel.classList.remove('empty');
+    statusDiv.textContent = 'Ready.';
     loadingScreen.classList.add('hidden');
-    // Show empty state with library prompts
-    emptyState.style.display = 'block';
     orb.setIdle();
   } else if (type === 'STATUS') {
     statusDiv.textContent = payload;
@@ -170,149 +162,101 @@ window.addEventListener('message', (e) => {
     orb.startAnimation();
   } else if (type === 'SUCCESS') {
     currentFlow = payload.flow;
-    renderCortex(payload.flow, payload.metrics);
-    statusDiv.textContent = `Compiled successfully (${payload.metrics.tokensPerSec} tok/s).`;
+    updateRailMetrics(payload.metrics, 'success');
+    statusDiv.textContent = `Compiled (${payload.metrics.tokensPerSec} tok/s).`;
     orb.setIdle();
     cmdInput.value = '';
-    emptyState.style.display = 'none';
+    exampleFlow.style.display = 'none';
     updateShareURL();
   } else if (type === 'RETRY') {
     statusDiv.textContent = payload.message;
+    railVal.textContent = `Retry ${payload.attempt}/2: ${payload.originalError}`;
+    railVal.classList.remove('empty');
     orb.pulse(0.8);
-    // Append retry message to cortex using createElement (not innerHTML)
-    const retryDiv = document.createElement('div');
-    retryDiv.style.cssText = 'color:var(--warning); font-size:0.75rem; margin-bottom:0.5rem; border-left:2px solid var(--warning); padding-left:0.5rem;';
-    retryDiv.textContent = `⚠️ ${payload.message} Error: ${payload.originalError}`;
-    cortexDiv.appendChild(retryDiv);
   } else if (type === 'FALLBACK' || type === 'ERROR') {
     currentMode = 'FALLBACK';
     modeChip.textContent = 'FALLBACK';
     modeChip.setAttribute('data-mode', 'FALLBACK');
-    statusDiv.textContent = type === 'FALLBACK' ? payload.message : 'Using RULE-BASED FALLBACK.';
+    statusDiv.textContent = type === 'FALLBACK' ? payload.message : 'Error.';
     currentFlow = compileToFlow(cmdInput.value || 'default fallback flow');
-    renderCortex(currentFlow, { mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' });
+    updateRailMetrics({ mode: 'FALLBACK', tokens: '-', duration: '0.01', tokensPerSec: '-' }, 'fallback');
     orb.setIdle();
     cmdInput.value = '';
-    emptyState.style.display = 'none';
+    exampleFlow.style.display = 'none';
     updateShareURL();
     loadingScreen.classList.add('hidden');
   }
 });
 
-// Compile function
+function updateRailMetrics(metrics, state) {
+  if (state === 'success') {
+    railGen.textContent = `${metrics.tokens} tok | ${metrics.duration}s | ${metrics.tokensPerSec} tok/s`;
+    railGen.classList.remove('empty');
+    railVal.textContent = 'schema-valid ✓';
+    railVal.classList.remove('empty');
+  } else {
+    railGen.textContent = 'not measured';
+    railGen.classList.add('empty');
+    railVal.textContent = 'rule-based fallback';
+    railVal.classList.remove('empty');
+  }
+}
+
 function compile() {
   const prompt = cmdInput.value.trim();
   if (!prompt) {
-    statusDiv.textContent = 'Please enter a prompt.';
+    statusDiv.textContent = 'Enter a prompt.';
     cmdInput.focus();
     return;
   }
   orb.pulse(0.5);
   orb.startAnimation();
-  // Clear cortex using textContent (not innerHTML)
-  cortexDiv.innerHTML = '';
-  const pre = document.createElement('pre');
-  pre.textContent = 'Compiling...';
-  cortexDiv.appendChild(pre);
+  railGen.textContent = 'compiling...';
+  railGen.classList.remove('empty');
   engineFrame.contentWindow.postMessage({ type: 'COMPILE', payload: prompt }, '*');
 }
 
-// Event Listeners
 compileBtn.addEventListener('click', compile);
-cmdBtn.addEventListener('click', () => {
-  cmdInput.focus();
-  orb.pulse(0.5);
-});
-
-cmdInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    compile();
-  }
-});
+cmdBtn.addEventListener('click', () => { cmdInput.focus(); orb.pulse(0.5); });
+cmdInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') compile(); });
 
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { 
-    e.preventDefault(); 
-    cmdInput.focus(); 
-    orb.pulse(0.5);
-  }
-  if (e.key === 'Escape') { 
-    cmdInput.blur(); 
-    hideEasterEgg();
-    closeAbout();
-  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); cmdInput.focus(); orb.pulse(0.5); }
+  if (e.key === 'Escape') { cmdInput.blur(); hideEasterEgg(); closeAbout(); }
 });
 
-// Library prompts
-libraryPrompts.forEach(btn => {
-  btn.addEventListener('click', () => {
-    cmdInput.value = btn.textContent;
+libraryChips.forEach(chip => {
+  chip.addEventListener('click', () => {
+    cmdInput.value = chip.dataset.prompt;
     compile();
   });
 });
 
-// About Panel
-function openAbout() {
-  aboutPanel.classList.remove('hidden');
-  aboutCloseBtn.focus();
-}
-function closeAbout() {
-  aboutPanel.classList.add('hidden');
-}
+exampleFlow.addEventListener('click', () => {
+  const weatherFlow = DEMO_FLOWS.find(f => f.id === 'demo-weather');
+  if (weatherFlow) {
+    currentFlow = weatherFlow.flow;
+    cmdInput.value = weatherFlow.description;
+    updateRailMetrics({ mode: 'REPLAY', tokens: '-', duration: '-', tokensPerSec: '-' }, 'fallback');
+    railModel.textContent = 'Library Example';
+    exampleFlow.style.display = 'none';
+    updateShareURL();
+  }
+});
+exampleFlow.addEventListener('keypress', (e) => { if (e.key === 'Enter') exampleFlow.click(); });
+
+function openAbout() { aboutPanel.classList.remove('hidden'); aboutCloseBtn.focus(); }
+function closeAbout() { aboutPanel.classList.add('hidden'); }
 aboutBtn.addEventListener('click', openAbout);
 aboutCloseBtn.addEventListener('click', closeAbout);
-
-function renderCortex(flow, metrics) {
-  if (!cortexDiv) return;
-  // Clear using createElement
-  cortexDiv.innerHTML = '';
-  
-  const modeLabel = document.createElement('div');
-  modeLabel.style.marginBottom = '0.5rem';
-  
-  let labelText = '[RULE-BASED FALLBACK]';
-  let labelColor = 'var(--warning)';
-  let metricsText = 'Metrics: n/a (no model in this mode)';
-  
-  if (metrics.mode === 'LIVE_WEBGPU') {
-    labelText = '[LIVE WebGPU]';
-    labelColor = 'var(--success)';
-    const retryText = metrics.retries > 0 ? ` | Retries: ${metrics.retries}` : '';
-    metricsText = `Tokens: ${metrics.tokens} | Time: ${metrics.duration}s | Speed: ${metrics.tokensPerSec} tok/s${retryText}`;
-  } else if (metrics.mode === 'LIVE_WASM') {
-    labelText = '[LIVE WASM]';
-    labelColor = '#60a5fa';
-    const retryText = metrics.retries > 0 ? ` | Retries: ${metrics.retries}` : '';
-    metricsText = `Tokens: ~${metrics.tokens} | Time: ${metrics.duration}s | Speed: ~${metrics.tokensPerSec} tok/s (Est.)${retryText}`;
-  }
-  
-  modeLabel.style.color = labelColor;
-  modeLabel.style.fontWeight = 'bold';
-  modeLabel.textContent = labelText;
-  
-  const metricsDiv = document.createElement('div');
-  metricsDiv.style.cssText = 'color:var(--text-muted); margin-bottom:0.5rem; font-size:0.75rem;';
-  metricsDiv.textContent = metricsText;
-  
-  const pre = document.createElement('pre');
-  pre.style.color = 'var(--text)';
-  pre.textContent = JSON.stringify(flow, null, 2);
-  
-  cortexDiv.appendChild(modeLabel);
-  cortexDiv.appendChild(metricsDiv);
-  cortexDiv.appendChild(pre);
-}
 
 function updateShareURL() {
   if (!currentFlow) return;
   try {
     const jsonStr = JSON.stringify(currentFlow);
     const encoded = btoa(encodeURIComponent(jsonStr));
-    const newUrl = `${window.location.origin}${window.location.pathname}#flow=${encoded}`;
-    window.history.replaceState({}, '', newUrl);
-  } catch (e) {
-    console.warn('Failed to encode flow for share URL', e);
-  }
+    window.history.replaceState({}, '', `${window.location.origin}${window.location.pathname}#flow=${encoded}`);
+  } catch (e) { console.warn('Share URL encode failed', e); }
 }
 
 // Easter Egg Logic
@@ -332,30 +276,19 @@ function showEasterEgg() {
     if (i >= msg.length) clearInterval(interval); 
   }, 30);
 }
-function hideEasterEgg() { 
-  orb.hideEasterEgg(); 
-  eeOverlay.classList.remove('active'); 
-}
+function hideEasterEgg() { orb.hideEasterEgg(); eeOverlay.classList.remove('active'); }
 
-document.getElementById('logo')?.addEventListener('click', () => {
+document.getElementById('logo').addEventListener('click', () => {
   logoClicks++; 
-  if (logoClicks === 3) { 
-    showEasterEgg(); 
-    logoClicks = 0; 
-  }
+  if (logoClicks === 3) { showEasterEgg(); logoClicks = 0; }
   setTimeout(() => { logoClicks = 0; }, 1000);
 });
-document.getElementById('ee-trigger')?.addEventListener('click', showEasterEgg);
-document.getElementById('ee-trigger')?.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') showEasterEgg();
-});
+document.getElementById('ee-trigger').addEventListener('click', showEasterEgg);
+document.getElementById('ee-trigger').addEventListener('keypress', (e) => { if (e.key === 'Enter') showEasterEgg(); });
 document.addEventListener('keydown', (e) => {
   if (e.key.length === 1) {
     typedChars += e.key.toLowerCase();
-    if (typedChars.includes('gg33')) { 
-      showEasterEgg(); 
-      typedChars = ''; 
-    }
+    if (typedChars.includes('gg33')) { showEasterEgg(); typedChars = ''; }
     if (typedChars.length > 10) typedChars = typedChars.slice(-10);
   }
 });
